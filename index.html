@@ -144,7 +144,7 @@ dialog p, dialog li {
     }
 }
 
-/* Compact hero: keep the visual center available for the background video. */
+/* Compact centered introduction. */
 .hero .hero-inner{padding-top:28px;}
 .hero .hero-copy{width:100%;max-width:980px;margin-inline:auto;text-align:center;}
 .hero .hero-copy .eyebrow{font-size:calc(11px * var(--font-scale))!important;line-height:1.5;margin-bottom:12px;}
@@ -154,6 +154,10 @@ dialog p, dialog li {
 .hero .hero-copy .buttons{margin-top:18px;gap:10px;}
 .hero .hero-copy .btn{padding:10px 16px;font-size:calc(12px * var(--font-scale));}
 @media(max-width:760px){.hero .hero-inner{padding-top:22px;}.hero .hero-copy h1{font-size:calc(clamp(25px,5.6vw,36px) * var(--font-scale))!important;max-width:24ch;}.hero .hero-copy>p.hero-description{font-size:calc(13px * var(--font-scale))!important;max-width:46ch;}.hero .hero-copy>p.hero-subtitle{margin-bottom:12px;}.hero .hero-copy .buttons{margin-top:16px;}}
+/* Fill the hero while preserving the image beneath the video. */
+.hero{overflow:hidden;}
+.hero video{object-fit:cover;object-position:center center;}
+.hero .poster{background-size:cover;background-position:center center;background-repeat:no-repeat;}
 </style><style>
 .independence-notice{margin-top:30px;padding-top:20px;border-top:1px solid var(--border-color)}
 .independence-notice h3{font-size:calc(16px * var(--font-scale))!important;margin-bottom:10px}
