@@ -79,3 +79,116 @@ footer a{color:#154e79!important}dialog{background:#fff!important;color:#202020!
 @media(max-width:850px){.twocol{grid-template-columns:1fr;gap:28px}.rankgrid{grid-template-columns:repeat(4,minmax(0,1fr))}.offitem{grid-template-columns:1fr;gap:4px;text-align:center}.offhead,.offrow{grid-template-columns:54px 1fr 1fr;gap:10px}.offitem h4{font-size:15px!important}.sectiontitle h2{font-size:25px!important}}
 @media(max-width:480px){.wrap,.container,header>div.wrap{width:calc(100% - 28px)}.rankgrid{grid-template-columns:repeat(2,minmax(0,1fr))}.offrow{padding:12px 4px!important}.offhead{padding:12px 4px!important;font-size:13px}.tabs button{font-size:13px;padding:10px;margin-right:2px}.hero h1{font-size:29px!important}}
 @media print{body{background:white!important;color:black!important}.top,.tabs,.toolbar,.links,.tools,.filters,.button-row,.review{display:none!important}.wrap,.container{width:100%;max-width:none}.hero{padding:0!important}.hero h1{font-size:22pt!important}.sectiontitle h2{font-size:19pt!important}.rankcard,.offrow{break-inside:avoid}.rankgrid{grid-template-columns:repeat(3,1fr)}.twocol{grid-template-columns:1fr 1fr}.offitem{grid-template-columns:65px 1fr}.offitem h4{font-size:12px!important}.art{height:60px}.art img{max-height:45px}.story{display:none}.qrblock{break-inside:avoid}footer{background:white!important}.ranksection[hidden]{display:block!important}}
+/* Restore hierarchy without decorative cards. */
+
+/* Give the introduction a defined dark-blue panel. */
+header {
+  background: #142b45 !important;
+  color: #ffffff !important;
+  border-bottom: 0 !important;
+}
+
+header .brand,
+header .hero h1,
+header .hero h1 span,
+header .hero h2,
+header .hero p,
+header .hero .eyebrow,
+header .hero .identity,
+header .hero .identity p {
+  color: #ffffff !important;
+}
+
+/* Keep the introduction compact and balanced. */
+header .hero {
+  display: grid !important;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 40px;
+  max-width: none;
+  padding: 30px 0 !important;
+}
+
+header .hero h1 {
+  font-size: clamp(28px, 3.2vw, 40px) !important;
+}
+
+header .hero .identity {
+  border-left: 1px solid #728399 !important;
+  padding: 8px 0 8px 24px !important;
+  margin: 0 !important;
+}
+
+/* Clear blue bars for the three rank sections. */
+.sectiontitle {
+  background: #142b45 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 14px 18px !important;
+  margin-top: 32px !important;
+}
+
+.sectiontitle h2 {
+  color: #ffffff !important;
+  font-size: 24px !important;
+}
+
+/* Subtle country labels above each comparison. */
+.country > h3 {
+  background: #edf1f5 !important;
+  border: 0 !important;
+  border-left: 4px solid #214e75 !important;
+  padding: 12px 14px !important;
+}
+
+/* Distinct officer-table column headings. */
+.offhead,
+.columnheads {
+  background: #e7edf3 !important;
+  color: #142b45 !important;
+  border-top: 2px solid #214e75 !important;
+}
+
+/* Make the draft notice quieter, not a large panel. */
+.review {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 8px 0 !important;
+  font-size: 12px !important;
+  color: #616970 !important;
+}
+
+/* Keep the comparison near the introduction. */
+main.wrap {
+  padding-top: 24px !important;
+}
+
+@media (max-width: 760px) {
+  header .hero {
+    grid-template-columns: 1fr !important;
+    gap: 18px;
+  }
+
+  header .hero .identity {
+    border-left: 0 !important;
+    border-top: 1px solid #728399 !important;
+    padding: 16px 0 0 !important;
+  }
+}
+
+@media print {
+  header,
+  .sectiontitle {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  header .hero h1,
+  header .hero h1 span,
+  header .hero h2,
+  header .hero p,
+  header .hero .eyebrow,
+  header .hero .identity p,
+  .sectiontitle h2 {
+    color: #000000 !important;
+  }
+}
