@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eighth Army LZ-Inventory v8.5</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root { --primary: #4CAF50; --error: #f44336; --bg: #121212; --panel: #1e1e1e; --text: #e0e0e0; --border: #333; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; display: flex; height: 100vh; background-color: var(--bg); color: var(--text); }
+        
+        #sidebar { width: 400px; background-color: var(--panel); display: flex; flex-direction: column; border-right: 1px solid var(--border); box-shadow: 2px 0 10px rgba(0,0,0,0.8); z-index: 1000; }
+        .header { padding: 20px; border-bottom: 1px solid var(--border); }
+        h2 { font-size: 1.2rem; margin: 0 0 10px 0; color: #fff; text-transform: uppercase; letter-spacing: 1px;}
+        
+        input[type="text"] { width: 100%; padding: 12px; background-color: #2d2d2d; border: 1px solid #555; color: #fff; box-sizing: border-box; border-radius: 4px; font-family: monospace; font-size: 14px; }
+        input[type="text"]:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 5px rgba(76, 175, 80, 0.5); }
+        
+        #tools-panel { padding: 10px 20px; font-size: 0.85rem; color: #aaa; background: #1a1a1a; border-bottom: 1px solid var(--border); }
+        
+        #resultsList { flex-grow: 1; overflow-y: auto; padding: 15px; }
+        
+        .lz-card { background-color: #2a2a2a; padding: 15px; margin-bottom: 12px; border-radius: 4px; cursor: pointer; border-left: 4px solid #555; transition: all 0.2s ease; }
+        .lz-card:hover { border-left-color: var(--primary); background-color: #333; }
+        .lz-title { font-weight: bold; font-size: 1.1rem; color: var(--primary); margin-bottom: 5px; }
+        .lz-aliases { font-size: 0.8rem; color: #888; font-style: italic; margin-bottom: 8px; }
+        .lz-detail { font-size: 0.85rem; color: #ccc; margin-bottom: 3px; font-family: monospace; }
+        
+        #map { flex-grow: 1; height: 100vh; z-index: 1; }
+        
+        .tactical-marker { background-color: var(--primary); border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 10px #000; }
+        .target-marker { background-color: var(--error); border: 2px solid #fff; border-radius: 50%; box-shadow: 0 0 15px var(--error); animation: pulse 1.5s infinite; }
+        
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); } 100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); } }
+    #footer { 
+            padding: 15px; 
+            font-size: 0.75rem; 
+            color: #777; 
+            text-align: center; 
+            border-top: 1px solid var(--border); 
+            background-color: #1a1a1a; 
+            line-height: 1.4;
+        }
+        #footer a { 
+            color: var(--primary); 
+            text-decoration: none; 
+        }
+        #footer a:hover { 
+            text-decoration: underline; 
+        }
+        /* Tactical Popup Expansion */
+        .tactical-popup .leaflet-popup-content {
+            white-space: nowrap !important;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <div class="header">
+            <h2 style="font-size: 1.1rem; margin:0 0 10px 0;">LZ-INVENTORY ENGINE V.8.5</h2>
+            <input type="text" id="searchInput" placeholder="Search Name, MGRS, or Lat/Long..." onkeyup="processInput()">
+        </div>
+        <div id="tools-panel"><span id="conversionStatus">System Ready.</span></div>
+        
+        <div id="resultsList"></div>
+        
+        <div id="footer">
+            &copy; 2026 Eighth Army<br>
+            Proprietary Airspace Architecture.<br>
+            Designed & Engineered by Giac Ly<br>
+            Contact: <a href="mailto:giac.t.ly.civ@army.mil">giac.t.ly.civ@army.mil</a><br>
+            Alternate: <a href="mailto:kenneth.m.thompson.civ@army.mil">kenneth.m.thompson.civ@army.mil</a>
+        </div>
+    </div> <div id="map"></div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mgrs/1.0.0/mgrs.min.js"></script>
+
+    <script>
+        // Data Hardening: Baseline coordinates permanently locked in to prevent load failures.
+        const inventory = [
+    { primaryName: "Alpha 1", aliases: [], ICAO: [], type: "Mapped Site", mgrs: "52S CF 25509 91520", lat: 36.95360, lng: 127.04021 },
+    { primaryName: "Delta 1", aliases: [], type: "Mapped Site", mgrs: "52S CF 23739 93220", lat: 36.96859, lng: 127.01994 },
+    { primaryName: "A 511", aliases: [], type: "Mapped Site", mgrs: "52S CF 24499 94000", lat: 36.97576, lng: 127.02829 },
+    { primaryName: "ALAMO", aliases: [], type: "Mapped Site", mgrs: "52S CH 33999 33000", lat: 38.22968, lng: 127.10343 },
+    { primaryName: "BAKER/BLACKCAT", aliases: [], type: "Mapped Site", mgrs: "52S CG 93199 09700", lat: 37.12756, lng: 127.79769 },
+    { primaryName: "BAYONET", aliases: [], type: "Mapped Site", mgrs: "52S CH 40999 05000", lat: 37.97872, lng: 127.18961 },
+    { primaryName: "BAYONNE", aliases: [], type: "Mapped Site", mgrs: "52S CG 47999 14000", lat: 37.16006, lng: 127.28815 },
+    { primaryName: "BAYWATCH", aliases: [], type: "Mapped Site", mgrs: "52S CG 82499 28500", lat: 37.29570, lng: 127.67430 },
+    { primaryName: "BIRI GOL (P-188)", aliases: [], type: "Mapped Site", mgrs: "52S BG 98999 95500", lat: 37.88483, lng: 126.71436 },
+    { primaryName: "BIROBANG", aliases: [], type: "Mapped Site", mgrs: "52S DE 54699 90300", lat: 36.05621, lng: 128.49702 },
+    { primaryName: "BULLS EYE 1", aliases: [], type: "Mapped Site", mgrs: "52S CG 00999 92000", lat: 37.85375, lng: 126.73805 },
+    { primaryName: "BULLS EYE 2", aliases: [], type: "Mapped Site", mgrs: "52S CH 10999 04000", lat: 37.96396, lng: 126.84849 },
+    { primaryName: "C 281", aliases: ["REYNOLDS RANGE"], type: "Mapped Site", mgrs: "52S CG 28499 45500", lat: 37.44046, lng: 127.06137 },
+    { primaryName: "H 209", aliases:[], ICAO: ["RK61"], type: "Mapped Site", mgrs: "52S CG 26199 80000", lat: 37.75081, lng: 127.02720 },
+    { primaryName: "Casey 39", aliases: [], type: "Mapped Site", mgrs: "52S CG 36979 97650", lat: 37.91180, lng: 127.14552 },
+    { primaryName: "CHANG SAN", aliases: [], type: "Mapped Site", mgrs: "52S ED 13000 93000", lat: 35.17987, lng: 129.14278 },
+    { primaryName: "CHIK-DO RANGE (R-105)", aliases: [], type: "Mapped Site", mgrs: "52S BE 36099 75700", lat: 35.89003, lng: 126.07638 },
+    { primaryName: "CHINHAE", aliases: ["K-10", "RKPE"], type: "Mapped Site", mgrs: "52S DD 72999 89000", lat: 35.14353, lng: 128.70360 },
+    { primaryName: "CHOE-JANG SAN", aliases: [], type: "Mapped Site", mgrs: "52S DE 64000 54000", lat: 35.72932, lng: 128.60192 },
+    { primaryName: "CHONGJU", aliases: ["K-59", "RKTU"], type: "Mapped Site", mgrs: "52S CF 55999 62000", lat: 36.69275, lng: 127.38811 },
+    { primaryName: "CONCORD", aliases: [], type: "Mapped Site", mgrs: "52S CG 23999 81300", lat: 37.76210, lng: 127.00192 },
+    { primaryName: "CP AMES", aliases: [], type: "Mapped Site", mgrs: "52S CF 60999 31000", lat: 36.41413, lng: 127.44965 },
+    { primaryName: "CP BONIFAS", aliases: [], type: "Mapped Site", mgrs: "52S BH 99999 00000", lat: 37.92558, lng: 126.72447 },
+    { primaryName: "CP CASTLE", aliases: [], type: "Mapped Site", mgrs: "52S CG 28999 99000", lat: 37.92249, lng: 127.05447 },
+    { primaryName: "CP ESSAYONS", aliases: [], type: "Mapped Site", mgrs: "52S CG 27999 79000", lat: 37.74214, lng: 127.04785 },
+    { primaryName: "CP FALLING WATER", aliases: [], type: "Mapped Site", mgrs: "52S CG 27999 77000", lat: 37.72413, lng: 127.04833 },
+    { primaryName: "CP GARRY OWEN", aliases: [], type: "Mapped Site", mgrs: "52S CG 09999 87000", lat: 37.81064, lng: 126.84159 },
+    { primaryName: "CP GRAY", aliases: [], type: "Mapped Site", mgrs: "52S CG 15999 52000", lat: 37.49661, lng: 126.91853 },
+    { primaryName: "CP HENRY", aliases: [], type: "Mapped Site", mgrs: "52S DE 64000 67000", lat: 35.84653, lng: 128.60134 },
+    { primaryName: "CP INDIAN", aliases: [], type: "Mapped Site", mgrs: "52S CG 30999 76000", lat: 37.71568, lng: 127.08258 },
+    { primaryName: "CP KYLE", aliases: [], type: "Mapped Site", mgrs: "52S CG 28999 79000", lat: 37.74233, lng: 127.05920 },
+    { primaryName: "CP MOBILE", aliases: [], type: "Mapped Site", mgrs: "52S CG 26999 86000", lat: 37.80501, lng: 127.03484 },
+    { primaryName: "CP NIMBLE", aliases: [], type: "Mapped Site", mgrs: "52S CG 28999 97000", lat: 37.90448, lng: 127.05495 },
+    { primaryName: "CP RAGE (A-306)", aliases: [], type: "Mapped Site", mgrs: "52S CG 86499 94500", lat: 37.89094, lng: 127.70919 },
+    { primaryName: "CP RED CLOUD", aliases: [], type: "Mapped Site", mgrs: "52S CG 26099 80000", lat: 37.75079, lng: 127.02606 },
+    { primaryName: "CP STANLEY (H-207)", aliases: [], type: "Mapped Site", mgrs: "52S CG 32399 76600", lat: 37.72134, lng: 127.09832 },
+    { primaryName: "CP STANTON", aliases: [], type: "Mapped Site", mgrs: "52T CS 10399 64400", lat: 46.60637, lng: 126.52418 },
+    { primaryName: "CP YONGIN", aliases: [], type: "Mapped Site", mgrs: "52S CG 38999 23000", lat: 37.23964, lng: 127.18489 },
+    { primaryName: "DARTBOARD (H-811)", aliases: [], type: "Mapped Site", mgrs: "52S DE 72300 55000", lat: 35.73861, lng: 128.69367 },
+    { primaryName: "H 220", aliases: [], ICAO:["RKST"], type: "Mapped Site", mgrs: "52S CG 28999 98700", lat: 37.91979, lng: 127.05454 },
+    { primaryName: "Dragon 109", aliases: [], type: "Mapped Site", mgrs: "52S CF 81709 02760", lat: 36.16238, lng: 127.68486 },
+    { primaryName: "Dragon SP", aliases: [], type: "Mapped Site", mgrs: "52S CG 47909 18740", lat: 37.20275, lng: 127.28617 },
+    { primaryName: "EVENREACH (H-310)", aliases:["EVENREACH"], ICAO: ["RK94"], type: "Mapped Site", mgrs: "52S CH 68499 06300", lat: 37.99483, lng: 127.50238 },
+    { primaryName: "FCC AZALEA", aliases: [], type: "Mapped Site", mgrs: "52S CE 66799 06200", lat: 35.29011, lng: 127.53516 },
+    { primaryName: "FCC BONG HWANT", aliases: ["BEASON"], type: "Mapped Site", mgrs: "52S CG 71999 58200", lat: 37.56194, lng: 127.55072 },
+    { primaryName: "FCC CRANE", aliases: [], type: "Mapped Site", mgrs: "52S CF 37799 24200", lat: 36.34922, lng: 127.19242 },
+    { primaryName: "FCC DONG HAE", aliases: [], type: "Mapped Site", mgrs: "52S DG 70199 78700", lat: 37.75512, lng: 128.66170 },
+    { primaryName: "FCC GO NEE", aliases: [], type: "Mapped Site", mgrs: "52S CH 54599 09700", lat: 38.02334, lng: 127.34344 },
+    { primaryName: "FCC GRANT", aliases: [], type: "Mapped Site", mgrs: "52S DH 40599 43200", lat: 38.33497, lng: 128.32034 },
+    { primaryName: "FCC KIROG", aliases: [], type: "Mapped Site", mgrs: "52S CG 14099 36400", lat: 37.35571, lng: 126.90098 },
+    { primaryName: "FCC LEE", aliases: [], type: "Mapped Site", mgrs: "52S DH 20499 17200", lat: 38.09911, lng: 128.09329 },
+    { primaryName: "FCC LIGHTHOUSE", aliases: [], type: "Mapped Site", mgrs: "52S DE 73000 67000", lat: 35.84682, lng: 128.70100 },
+    { primaryName: "FCC SUN (TAEGI SAN)", aliases: [], type: "Mapped Site", mgrs: "52S DG 37299 62200", lat: 37.60475, lng: 128.28966 },
+    { primaryName: "FOC MYUL DAE", aliases: [], type: "Mapped Site", mgrs: "52S DE 67800 71700", lat: 35.88904, lng: 128.64323 },
+    { primaryName: "FOC R-510", aliases: [], type: "Mapped Site", mgrs: "52S CG 64499 18300", lat: 37.20134, lng: 127.47313 },
+    { primaryName: "FOC SUN BONG", aliases: [], type: "Mapped Site", mgrs: "52S CG 42799 28400", lat: 37.28894, lng: 127.22658 },
+    { primaryName: "FREEDOM BRIDGE", aliases: [], type: "Mapped Site", mgrs: "52S CG 00499 95500", lat: 37.88516, lng: 126.73140 },
+    { primaryName: "HANNAM VILLAGE", aliases: [], type: "Mapped Site", mgrs: "52S CG 22999 55000", lat: 37.52500, lng: 126.99695 },
+    { primaryName: "HIGHPOINT (H-508)", aliases:[], ICAO: ["RK97"], type: "Mapped Site", mgrs: "52S CF 40199 73800", lat: 36.79655, lng: 127.20886 },
+    { primaryName: "HILL 343", aliases: [], type: "Mapped Site", mgrs: "52S CG 21999 63000", lat: 37.59687, lng: 126.98370 },
+    { primaryName: "HILL 448", aliases: [], type: "Mapped Site", mgrs: "52S CG 47999 18400", lat: 37.19970, lng: 127.28725 },
+    { primaryName: "HILL 710", aliases: [], type: "Mapped Site", mgrs: "52S CF 85199 91500", lat: 36.96260, lng: 127.71043 },
+    { primaryName: "HOTEL CALIFORNIA", aliases: [], type: "Mapped Site", mgrs: "52S CG 67599 45900", lat: 37.45049, lng: 127.50313 },
+    { primaryName: "HWAAK SAN", aliases: [], type: "Mapped Site", mgrs: "52S CH 67999 05000", lat: 37.98305, lng: 127.49693 },
+    { primaryName: "IRWOL SAN", aliases: [], type: "Mapped Site", mgrs: "52S EF 08900 73100", lat: 36.80369, lng: 129.09977 },
+    { primaryName: "K-16 (SEOUL AB)", aliases: ["RKSM"], type: "Mapped Site", mgrs: "52S CG 32699 47200", lat: 37.45654, lng: 127.10844 },
+    { primaryName: "KAMAK SAN", aliases: [], type: "Mapped Site", mgrs: "52S CH 21999 01000", lat: 37.93916, lng: 126.97438 },
+    { primaryName: "KIMHAE INTL", aliases:[], ICAO: ["K-1", "RKPK"], type: "Mapped Site", mgrs: "52S DD 95500 94500", lat: 35.19347, lng: 128.95057 },
+    { primaryName: "KIMPO INTL", aliases:[], ICAO: ["K-14", "RKSS"], type: "Mapped Site", mgrs: "52S CG 04999 59200", lat: 37.55920, lng: 126.79227 },
+    { primaryName: "KOON-NI RANGE", aliases: [], type: "Mapped Site", mgrs: "52S BG 99999 01000", lat: 37.03392, lng: 126.75137 },
+    { primaryName: "KORYO SAN", aliases: [], type: "Mapped Site", mgrs: "52S BG 73999 79000", lat: 37.73041, lng: 126.43547 },
+    { primaryName: "KUNSAN AB", aliases:["K-8"], ICAO: ["RKJK"], type: "Mapped Site", mgrs: "52S BE 84999 76500", lat: 35.90920, lng: 126.61744 },
+    { primaryName: "LAGUARDIA", aliases: [], type: "Mapped Site", mgrs: "52S CG 27399 79100", lat: 37.74293, lng: 127.04102 },
+    { primaryName: "LZ Elbo", aliases: [], type: "Mapped Site", mgrs: "52S CF 16199 76300", lat: 36.81472, lng: 126.93939 },
+    { primaryName: "LZ Jerry", aliases: [], type: "Mapped Site", mgrs: "52S CG 85099 22100", lat: 37.23835, lng: 127.70462 },
+    { primaryName: "LZ Nightmare", aliases: [], type: "Mapped Site", mgrs: "52S CG 96899 02400", lat: 37.06219, lng: 127.84034 },
+    { primaryName: "LZ Tom", aliases: [], type: "Mapped Site", mgrs: "52S CG 93999 09300", lat: 37.12405, lng: 127.80675 },
+    { primaryName: "MAEBONG SAN", aliases: [], type: "Mapped Site", mgrs: "52S EG 11900 20100", lat: 37.22733, lng: 129.13414 },
+    { primaryName: "MASAN", aliases: [], type: "Mapped Site", mgrs: "52S DD 66000 97000", lat: 35.21545, lng: 128.62642 },
+    { primaryName: "MORSE", aliases: [], type: "Mapped Site", mgrs: "52S CG 22999 56000", lat: 37.53401, lng: 126.99671 },
+    { primaryName: "N. CAROLINA RANGE", aliases: [], type: "Mapped Site", mgrs: "52S BG 99899 95600", lat: 37.88593, lng: 126.72456 },
+    { primaryName: "Mike 1", aliases: [], type: "Mapped Site", mgrs: "52S CF 24479 91590", lat: 36.95404, lng: 127.02863 },
+    { primaryName: "Pinnacle 1", aliases: [], type: "Mapped Site", mgrs: "52S CF 16229 79550", lat: 36.84400, lng: 126.93894 },
+    { primaryName: "Pinnacle 2", aliases: [], type: "Mapped Site", mgrs: "52S CF 16899 83300", lat: 36.87792, lng: 126.94555 },
+    { primaryName: "NAMSAN", aliases: [], type: "Mapped Site", mgrs: "52S CG 22899 57500", lat: 37.54750, lng: 126.99522 },
+    { primaryName: "OGAP SAN", aliases: [], type: "Mapped Site", mgrs: "52S CG 84199 11200", lat: 37.14001, lng: 127.69616 },
+    { primaryName: "OKLAHOMA RANGE", aliases: [], type: "Mapped Site", mgrs: "52S CH 05599 00900", lat: 37.93490, lng: 126.78790 },
+    { primaryName: "OSAN", aliases: ["K-55"], ICAO:["RKSO"], type: "Mapped Site", mgrs: "52S CG 24999 07500", lat: 37.09747, lng: 127.03077 },
+    { primaryName: "PAEGUN SAN", aliases: [], type: "Mapped Site", mgrs: "52S DG 08299 23200", lat: 37.25084, lng: 127.96599 },
+    { primaryName: "Pinnacle 3", aliases: [], type: "Mapped Site", mgrs: "52S CF 17279 85150", lat: 36.89466, lng: 126.94936 },
+    { primaryName: "Pinnacle 4", aliases: [], type: "Mapped Site", mgrs: "52S CF 20369 84350", lat: 36.88804, lng: 126.98421 },
+    { primaryName: "Safe Haven", aliases: [], type: "Mapped Site", mgrs: "52S CF 24629 92790", lat: 36.96488, lng: 127.03003 },
+
+    { primaryName: "N 100 HELIPAD", aliases:[], ICAO: ["RK9L"], type: "Helipad", mgrs: "52S EG 08331 53867", lat: 37.53175, lng: 129.09431 },
+    { primaryName: "C 100 HELIPORT", aliases:[], ICAO: ["RK1C"], type: "Heliport", mgrs: "52S CG 13114 40003", lat: 37.38796, lng: 126.88894 },
+    { primaryName: "N 101 HELIPAD", aliases:[], ICAO: ["RK9S"], type: "Helipad", mgrs: "52S EF 33604 86075", lat: 36.92009, lng: 129.37729 },
+    { primaryName: "N 102 HELIPAD", aliases:[], ICAO: ["RKC9"], type: "Helipad", mgrs: "52S DH 76120 07475", lat: 38.01465, lng: 128.72797 },
+    { primaryName: "N 103 HELIPAD", aliases:[], ICAO: ["RK9M"], type: "Helipad", mgrs: "52S EE 38095 85432", lat: 36.01263, lng: 129.42275 },
+    { primaryName: "G 103", aliases: [], ICAO:["RKRB"], type: "Site", mgrs: "52S CG 00799 49954", lat: 37.47503, lng: 126.74725 },
+    { primaryName: "N 104 HELIPAD", aliases:[], ICAO: ["RK9N"], type: "Helipad", mgrs: "52S FG 67636 49705", lat: 37.47905, lng: 130.89593 },
+    { primaryName: "H 104 LANDING SITE", aliases: [], ICAO:["RK6G"], type: "Landing Site", mgrs: "52S BG 74111 80484", lat: 37.74380, lng: 126.43627 },
+    { primaryName: "N 105 HELIPAD", aliases:[], ICAO: ["RK8A"], type: "Helipad", mgrs: "52S GG 54484 25307", lat: 37.23958, lng: 131.86885 },
+    { primaryName: "C 106 HELIPORT", aliases:[], ICAO: ["RK1D"], type: "Heliport", mgrs: "52S BG 92047 66643", lat: 37.62340, lng: 126.64361 },
+    { primaryName: "N 107 HELIPAD", aliases:[], ICAO: ["RK9O"], type: "Helipad", mgrs: "52S EE 51107 88972", lat: 36.04396, lng: 129.56737 },
+    { primaryName: "G 107", aliases:[], ICAO: ["RK25"], type: "Site", mgrs: "52S BG 84955 77020", lat: 37.71522, lng: 126.56027 },
+    { primaryName: "N 109 HELIPAD", aliases:[], ICAO: ["RK8D"], type: "Helipad", mgrs: "52S EF 32219 00538", lat: 36.14903, lng: 129.35816 },
+    { primaryName: "C 109 HELIPORT", aliases:[], ICAO: ["RK1E"], type: "Heliport", mgrs: "52S CG 17590 79981", lat: 37.74896, lng: 126.92954 },
+    { primaryName: "N 110 HELIPAD", aliases:[], ICAO: ["RK8E"], type: "Helipad", mgrs: "52S EF 34093 10184", lat: 36.23594, lng: 129.37942 },
+    { primaryName: "G 110", aliases:[], ICAO: ["RKRP"], type: "Site", mgrs: "52S CG 05558 81864", lat: 37.76345, lng: 126.79255 },
+    { primaryName: "G 113", aliases: ["SUSAEK"], ICAO:["RKRS"], type: "Site", mgrs: "52S CG 11922 63634", lat: 37.60058, lng: 126.86946 },
+    { primaryName: "H 122 HELIPORT", aliases: [], ICAO:["RK1J"], type: "Heliport", mgrs: "52S CG 00911 97290", lat: 37.90138, lng: 126.73559 },
+    { primaryName: "C 123 HELIPORT", aliases: [], ICAO:["RK1K"], type: "Heliport", mgrs: "52S BG 99893 96479", lat: 37.89386, lng: 126.72423 },
+    { primaryName: "C 126 HELIPORT", aliases:[], ICAO: ["RK1L"], type: "Heliport", mgrs: "52S CG 06017 99731", lat: 37.92447, lng: 126.79297 },
+    { primaryName: "H 127 HELIPORT", aliases: [], ICAO:["RK6J"], type: "Heliport", mgrs: "52S CH 00247 00849", lat: 37.93328, lng: 126.72705 },
+    { primaryName: "H 128 HELIPORT", aliases: [], ICAO:["RK6K"], type: "Heliport", mgrs: "52S BH 95924 03322", lat: 37.95460, lng: 126.67720 },
+    { primaryName: "C 132 HELIPORT", aliases: [], ICAO:["RK1M"], type: "Heliport", mgrs: "52S CG 03318 37963", lat: 37.36757, lng: 126.77891 },
+    { primaryName: "C 135 HELIPORT", aliases: [], ICAO:["RK1N"], type: "Heliport", mgrs: "52S BG 97340 66478", lat: 37.62309, lng: 126.70360 },
+    { primaryName: "C 137 HELIPORT", aliases: [], ICAO:["RK1O"], type: "Heliport", mgrs: "52S CG 18652 90140", lat: 37.84068, lng: 126.93903 },
+    { primaryName: "C 143 HELIPORT", aliases: [], ICAO:["RK1Q"], type: "Heliport", mgrs: "52S CG 13662 24826", lat: 37.46247, lng: 126.89306 },
+    { primaryName: "C 145 HELIPORT", aliases: [], ICAO:["RK6V"], type: "Heliport", mgrs: "52S CG 07627 43099", lat: 37.41473, lng: 126.82619 },
+    { primaryName: "C 149 HELIPORT", aliases: [], ICAO:["RK1S"], type: "Heliport", mgrs: "52S CG 13973 40907", lat: 37.39628, lng: 126.89842 },
+    { primaryName: "C 150 HELIPORT", aliases: [], ICAO:["RK70"], type: "Heliport", mgrs: "52S CG 00874 44962", lat: 37.47209, lng: 126.74819 },
+    { primaryName: "C 154 HELIPORT", aliases: [], ICAO:["RKC2"], type: "Heliport", mgrs: "52S CG 01034 83754", lat: 37.77949, lng: 126.74071 },
+    { primaryName: "C 157 HELIPORT", aliases: [], ICAO:["RK1V"], type: "Heliport", mgrs: "52S CG 15772 77040", lat: 37.72212, lng: 126.90965 },
+    { primaryName: "C 158 HELIPORT", aliases: [], ICAO:["RK1W"], type: "Heliport", mgrs: "52S CH 02078 02418", lat: 37.94782, lng: 126.74743 },
+    { primaryName: "G 162 HELIPORT", aliases: [], ICAO:["RK7H"], type: "Site", mgrs: "52S CH 18189 13267", lat: 38.04889, lng: 126.92793 },
+    { primaryName: "C 164 HELIPORT", aliases: [], ICAO:["RK7X"], type: "Heliport", mgrs: "52S CG 05530 96114", lat: 37.89178, lng: 126.78839 },
+    { primaryName: "H 172 HELIPORT", aliases: [], ICAO:["RK6L"], type: "Heliport", mgrs: "52S CG 07267 92954", lat: 37.86371, lng: 126.80899 },
+    { primaryName: "H 173 HELIPORT", aliases: ["RK6M"], type: "Heliport", mgrs: "52S CG 13249 97688", lat: 37.90758, lng: 126.87571 },
+    { primaryName: "H 173A HELIPORT", aliases: [], ICAO:["RK0A"], type: "Heliport", mgrs: "52S CG 13544 98150", lat: 37.91179, lng: 126.87894 },
+    { primaryName: "H 176 LANDING SITE", aliases:[], ICAO: ["RK6Z"], type: "Landing Site", mgrs: "52S CG 06420 97830", lat: 37.90743, lng: 126.79805 },
+    { primaryName: "H 177 HELIPORT", aliases: [], ICAO:["RK01"], type: "Heliport", mgrs: "52S CG 07033 89851", lat: 37.83571, lng: 126.80715 },
+    { primaryName: "C 184 HELIPORT", aliases:[], ICAO: ["RK2D"], type: "Heliport", mgrs: "52S BG 49817 73308", lat: 37.67289, lng: 126.16329 },
+    { primaryName: "C 187 HELIPORT", aliases: [], ICAO:["RK64"], type: "Heliport", mgrs: "52S CG 18155 43176", lat: 37.41754, lng: 126.94508 },
+    { primaryName: "C 190 HELIPORT", aliases: [], ICAO:["RK2J"], type: "Heliport", mgrs: "52S CG 07494 98240", lat: 37.91135, lng: 126.81015 },
+    { primaryName: "C 191 HELIPORT", aliases: [], ICAO:["RK2K"], type: "Heliport", mgrs: "52S BG 98860 98155", lat: 37.90872, lng: 126.71204 },
+    { primaryName: "C 192 HELIPORT", aliases: [], ICAO:["RK2L"], type: "Heliport", mgrs: "52S CG 05817 73011", lat: 37.68376, lng: 126.79784 },
+    { primaryName: "C 193 HELIPORT", aliases: [], ICAO:["RKA9"], type: "Heliport", mgrs: "52S CG 07734 57576", lat: 37.54514, lng: 126.82364 },
+    { primaryName: "C 194 HELIPORT", aliases: [], ICAO:["RKB1"], type: "Heliport", mgrs: "52S BG 95952 56458", lat: 37.53256, lng: 126.69067 },
+    { primaryName: "C 195 HELIPORT", aliases: [], ICAO:["RKB2"], type: "Heliport", mgrs: "52S CG 04351 30842", lat: 37.30366, lng: 126.79244 },
+
+    { primaryName: "H 200 MADISON", aliases: [], ICAO:["RK02"], type: "Helipad", mgrs: "52S CG 24418 35859", lat: 37.35286, lng: 127.01756 },
+    { primaryName: "N 200 HELIPAD", aliases: [], ICAO:["RKSD"], type: "Helipad", mgrs: "52S CG 15004 15954", lat: 37.17172, lng: 126.91627 },
+    { primaryName: "C 201 HELIPORT", aliases: [], ICAO:["RK6W"], type: "Heliport", mgrs: "52S CG 36363 40005", lat: 37.39238, lng: 127.15144 },
+    { primaryName: "N 201 HELIPAD", aliases: [], ICAO:["RKBN", "RK9P"], type: "Helipad", mgrs: "52S CF 04830 96342", lat: 36.99299, lng: 126.80685 },
+    { primaryName: "H 202 HELIPORT", aliases:[], ICAO: ["RK03"], type: "Heliport", mgrs: "52S CH 21611 01229", lat: 37.94114, lng: 126.96990 },
+    { primaryName: "C 202 HELIPORT", aliases: [], ICAO:["RK7Q"], type: "Heliport", mgrs: "52S CH 22274 01812", lat: 37.94653, lng: 126.97729 },
+    { primaryName: "N 202 HELIPAD", aliases: [], ICAO:["RKD2"], type: "Helipad", mgrs: "52S BG 88846 48728", lat: 37.46133, lng: 126.61253 },
+    { primaryName: "H 207", aliases: [], ICAO:["RKSX"], type: "Mapped Site", mgrs: "52S CG 32499 76400", lat: 37.71956, lng: 127.09950 },
+    { primaryName: "H 209 HELIPORT", aliases:[], ICAO: ["RK61"], type: "Heliport", mgrs: "52S CG 26113 80052", lat: 37.75126, lng: 127.02620 },
+    { primaryName: "H 211 HELIPORT", aliases: [], ICAO:["RK04"], type: "Heliport", mgrs: "52S CG 27373 81920", lat: 37.76834, lng: 127.04006 },
+    { primaryName: "H 220 HELIPORT", aliases: [], ICAO:["RKST"], type: "Heliport", mgrs: "52S CG 29089 98806", lat: 37.92078, lng: 127.05553 },
+    { primaryName: "H 220A HELIPORT", aliases:[], ICAO: ["RK62"], type: "Heliport", mgrs: "52S CH 29298 00883", lat: 37.93952, lng: 127.05741 },
+    { primaryName: "H 221 HELIPORT", aliases: [], ICAO:["RK05"], type: "Heliport", mgrs: "52S CG 31772 98852", lat: 37.92168, lng: 127.08603 },
+    { primaryName: "H 221", aliases: [], ICAO:["RK05"], type: "Mapped Site", mgrs: "52S CG 31799 98800", lat: 37.92121, lng: 127.08636 },
+    { primaryName: "H 252", aliases: [], ICAO:["RKQ1"], type: "Mapped Site", mgrs: "52S CG 31299 97500", lat: 37.90941, lng: 127.08098 },
+    { primaryName: "H 263", aliases: [], ICAO:["RK63"], type: "Mapped Site", mgrs: "52S CG 30599 98300", lat: 37.91649, lng: 127.07283 },
+    { primaryName: "H 208", aliases: [], ICAO:[], type: "Mapped Site", mgrs: "52S CG 21299 64700", lat: 37.61205, lng: 126.97536 },
+    { primaryName: "H 211", aliases: [], ICAO:["RK04"], type: "Mapped Site", mgrs: "52S CG 27304 81890", lat: 37.76805, lng: 127.03928 },
+    { primaryName: "H 230", aliases: [], ICAO:[], type: "Mapped Site", mgrs: "52S CG 04869 83627", lat: 37.77918, lng: 126.78426 },
+    { primaryName: "H 233", aliases: [], ICAO:["RK07"], type: "Mapped Site", mgrs: "52S CH 34456 34264", lat: 38.24115, lng: 127.10836 },
+    { primaryName: "C 240 HELIPORT", aliases: [], ICAO:["RK7A"], type: "Heliport", mgrs: "52S CG 28999 23000", lat: 37.30594, lng: 127.06484 },
+    { primaryName: "C 241 HELIPORT", aliases: [], ICAO:["RK2O"], type: "Heliport", mgrs: "52S CG 24326 81405", lat: 37.86168, lng: 127.02112 },
+    { primaryName: "H 245", aliases: [], ICAO:["RK08"], type: "Mapped Site", mgrs: "52S CG 43410 53548", lat: 37.51561, lng: 127.22814 },
+    { primaryName: "H 247", aliases: [], ICAO:["RK09", "NORTH"], type: "Mapped Site", mgrs: "52S CG 24326 81405", lat: 37.76311, lng: 127.00561 },
+    { primaryName: "H 248", aliases: [], ICAO:["RK91"], type: "Mapped Site", mgrs: "52S CG 27297 73953", lat: 37.69655, lng: 127.04109 },
+    { primaryName: "H 250", aliases: [], ICAO:["RK11"], type: "Mapped Site", mgrs: "52S CG 04768 55397", lat: 37.52490, lng: 126.79067 },
+    { primaryName: "H 252 HELIPORT", aliases: [], ICAO:["RKQ1"], type: "Heliport", mgrs: "52S CG 31299 97500", lat: 37.92816, lng: 127.06364 },
+    { primaryName: "H 253", aliases: [], type: "Mapped Site", mgrs: "52S CG 22323 46400", lat: 37.44740, lng: 126.99138 },
+    { primaryName: "H 263 HELIPORT", aliases: [], ICAO:["RK63"], type: "Heliport", mgrs: "52S CG 30599 98300", lat: 37.90900, lng: 127.08031 },
+    { primaryName: "H 264", aliases: [], ICAO:["RKB8"], type: "Mapped Site", mgrs: "52S CG 21139 55410", lat: 37.52834, lng: 126.97581 },
+    { primaryName: "H 264 HELIPORT", aliases: [], ICAO:["RKB8"], type: "Heliport", mgrs: "52S CG 21139 55410", lat: 37.52836, lng: 126.97583 },
+    { primaryName: "H 281 HELIPAD", aliases: [], ICAO:["RK12"], type: "Helipad", mgrs: "52S CG 28499 43400", lat: 37.42669, lng: 127.06126 },
+    { primaryName: "C 281", aliases: ["REYNOLDS RANGE"], ICAO: [], type: "Site", mgrs: "52S CG 28499 45500", lat: 37.440467, lng: 127.061367 },
+    { primaryName: "H 281 HELIPAD", aliases: [], ICAO: ["RK12"], type: "Helipad", mgrs: "52S CG 28499 43400", lat: 37.426694, lng: 127.061264 },
+    { primaryName: "C 282 HELIPORT", aliases: [], ICAO: ["RK3B"], type: "Heliport", mgrs: "52S DH 17688 12686", lat: 38.182717, lng: 128.059017 },
+    { primaryName: "C 283 HELIPORT", aliases: [], ICAO: ["RK3C"], type: "Heliport", mgrs: "52S CG 87363 95568", lat: 37.900800, lng: 127.719150 },
+    { primaryName: "H 283 HELIPORT", aliases: [], ICAO: ["RK1C"], type: "Heliport", mgrs: "52S CG 32144 51969", lat: 37.500117, lng: 127.100250 },
+    { primaryName: "C 284 HELIPORT", aliases: [], ICAO: ["RK3D"], type: "Heliport", mgrs: "52S CG 84742 11728", lat: 38.046100, lng: 127.692050 },
+    { primaryName: "C 285 HELIPORT", aliases: [], ICAO: ["RK3E"], type: "Heliport", mgrs: "52S CG 90578 02555", lat: 37.964283, lng: 127.756967 },
+    { primaryName: "C 286 HELIPORT", aliases: [], ICAO: ["RK3F"], type: "Heliport", mgrs: "52S CG 64805 72170", lat: 37.687133, lng: 127.475467 },
+    { primaryName: "H 286 HELIPORT", aliases: [], ICAO: ["RK2Z"], type: "Heliport", mgrs: "52S CG 70884 52636", lat: 37.511433, lng: 127.537067 },
+    { primaryName: "C 287 HELIPORT", aliases: [], ICAO: ["RK3G"], type: "Heliport", mgrs: "52S CG 89656 86820", lat: 37.822267, lng: 127.747083 },
+    { primaryName: "C 288 HELIPORT", aliases: [], ICAO: ["RK3H"], type: "Heliport", mgrs: "52S CG 87968 93400", lat: 37.881333, lng: 127.726767 },
+
+    { primaryName: "C 301 HELIPORT", aliases: [], ICAO: ["RK3I"], type: "Heliport", mgrs: "52S CG 04514 33005", lat: 37.323117, lng: 126.780867 },
+    { primaryName: "H 301 HELIPORT", aliases: [], ICAO: ["RK1P"], type: "Heliport", mgrs: "52S CG 18784 77334", lat: 37.725217, lng: 126.942500 },
+    { primaryName: "C 302 HELIPORT", aliases: [], ICAO: ["RK3J"], type: "Heliport", mgrs: "52S CG 06109 58451", lat: 37.552567, lng: 126.799367 },
+    { primaryName: "H 302 HELIPORT", aliases: [], ICAO:["RKA8"], type: "Mapped Site", mgrs: "52S CG 71168 57972", lat: 37.55977, lng: 127.54135 },
+    { primaryName: "C 303 HELIPORT", aliases: [], ICAO: ["RK3K"], type: "Heliport", mgrs: "52S CG 03541 59265", lat: 37.560100, lng: 126.770383 },
+    { primaryName: "H 303 HELIPORT", aliases: [], ICAO: ["RK2A"], type: "Heliport", mgrs: "52S CG 23098 74768", lat: 37.701667, lng: 126.991400 },
+    { primaryName: "C 304 HELIPORT", aliases: [], ICAO: ["RK2B"], type: "Heliport", mgrs: "52S CG 15730 80644", lat: 37.755217, lng: 126.908300 },
+    { primaryName: "H 304 HELIPORT", aliases: [], ICAO: ["RK52"], type: "Heliport", mgrs: "52S CF 23414 88283", lat: 36.924317, lng: 127.015267 },
+    { primaryName: "C 305 HELIPORT", aliases: [], ICAO: ["RK3L"], type: "Heliport", mgrs: "52S BG 93310 48396", lat: 37.458750, lng: 126.659067 },
+    { primaryName: "H 306 HELIPORT", aliases: [], ICAO: ["RK06"], type: "Heliport", mgrs: "52S CG 86663 94843", lat: 37.894000, lng: 127.711067 },
+    { primaryName: "H 307 HELIPORT", aliases: [], ICAO: ["RK2X"], type: "Heliport", mgrs: "52S CG 31853 55944", lat: 37.535517, lng: 127.096850 },
+    { primaryName: "H 308 HELIPORT", aliases: [], ICAO: ["RK2Y"], type: "Heliport", mgrs: "52S CG 18210 48092", lat: 37.461617, lng: 126.943683 },
+    { primaryName: "C 308 HELIPORT", aliases: [], ICAO: ["RK3M"], type: "Heliport", mgrs: "52S DH 14336 17441", lat: 38.100200, lng: 128.023083 },
+    { primaryName: "C 309 HELIPORT", aliases: [], ICAO: ["RK3N"], type: "Heliport", mgrs: "52S CH 68499 04543", lat: 37.979000, lng: 127.502233 },
+    { primaryName: "H 309 HELIPAD", aliases: [], ICAO: ["RK5I"], type: "Helipad", mgrs: "52S CG 26649 76594", lat: 37.719833, lng: 127.033267 },
+    { primaryName: "C 310 HELIPORT", aliases: [], ICAO: ["RK3O"], type: "Heliport", mgrs: "52S CG 89506 86622", lat: 37.900067, lng: 127.743217 },
+    { primaryName: "H 310 HELIPORT", aliases: ["EVENREACH"], ICAO:["RK94"], type: "Heliport", mgrs: "52S CH 68656 06406", lat: 37.99600, lng: 127.50411 },
+    { primaryName: "C 312 HELIPORT", aliases: [], ICAO: ["RK3P"], type: "Heliport", mgrs: "52S DH 07026 26627", lat: 38.182767, lng: 127.939467 },
+    { primaryName: "H 319 HELIPORT", aliases: [], type: "Mapped Site", mgrs: "52S CH 68599 06300", lat: 37.99485, lng: 127.50352 },
+
+    { primaryName: "C 400 HELIPORT", aliases: ["RK3M"], type: "Heliport", mgrs: "52S DG 08922 42654", lat: 37.426228, lng: 127.970611 },
+    { primaryName: "H 401 HELIPORT", aliases: ["RK55"], type: "Heliport", mgrs: "52S DG 09192 45721", lat: 37.453894, lng: 127.973308 },
+    { primaryName: "G 404", aliases: ["RK13"], type: "Site", mgrs: "52S DH 11133 16004", lat: 38.087464, lng: 127.986639 },
+    { primaryName: "G 405", aliases: [], type: "Site", mgrs: "52S DH 15881 19547", lat: 38.119844, lng: 128.040358 },
+    { primaryName: "C 406 HELIPORT", aliases: ["RK3N"], type: "Heliport", mgrs: "52S DH 22270 41604", lat: 38.319189, lng: 128.110817 },
+    { primaryName: "G 406", aliases: ["RK17"], type: "Site", mgrs: "52S DH 13118 21712", lat: 38.139106, lng: 128.008561 },
+    { primaryName: "G 407", aliases: ["RKND"], type: "Site", mgrs: "52S DH 64830 21713", lat: 38.142608, lng: 128.598647 },
+    { primaryName: "G 408", aliases: ["RK7S"], type: "Site", mgrs: "52S DH 07041 28825", lat: 38.202575, lng: 127.938294 },
+    { primaryName: "C 408 HELIPORT", aliases: ["RK3O"], type: "Heliport", mgrs: "52S DH 67904 13352", lat: 38.067375, lng: 128.634108 },
+    { primaryName: "C 410 HELIPORT", aliases: [], ICAO: ["RK16"], type: "Heliport", mgrs: "52S DH 75043 94879", lat: 37.868617, lng: 128.830111 },
+    { primaryName: "C 411 HELIPORT", aliases: [], ICAO: ["RK3P"], type: "Heliport", mgrs: "52S DG 07151 40134", lat: 37.403683, lng: 127.950767 },
+    { primaryName: "G 412", aliases: [], ICAO: ["RK44"], type: "Site", mgrs: "52S DH 30238 33215", lat: 38.243367, lng: 128.202283 },
+    { primaryName: "C 412 HELIPORT", aliases: [], ICAO: ["RK3Q"], type: "Heliport", mgrs: "52S EG 13867 47040", lat: 37.469583, lng: 129.156567 },
+    { primaryName: "G 413", aliases: [], ICAO: ["RK21"], type: "Site", mgrs: "52S DH 52481 48834", lat: 38.382283, lng: 128.457583 },
+    { primaryName: "G 414", aliases: [], ICAO: ["RK43"], type: "Site", mgrs: "52S DH 30297 17992", lat: 38.106250, lng: 128.201033 },
+    { primaryName: "C 415 HELIPORT", aliases: [], ICAO: ["RK65"], type: "Heliport", mgrs: "52S DG 06649 38386", lat: 37.387967, lng: 127.944933 },
+    { primaryName: "G 417", aliases: [], ICAO: ["RK34"], type: "Site", mgrs: "52S DG 61973 67204", lat: 37.650367, lng: 128.569767 },
+    { primaryName: "G 418", aliases: [], ICAO: ["RK33"], type: "Site", mgrs: "52S DG 45322 33158", lat: 37.344600, lng: 128.384150 },
+    { primaryName: "G 419", aliases: [], ICAO: ["RKMB"], type: "Site", mgrs: "52S DG 02765 73356", lat: 37.703183, lng: 127.904600 },
+    { primaryName: "G 420", aliases: [], ICAO: ["RKMA"], type: "Site", mgrs: "52S DH 29837 01358", lat: 37.956183, lng: 128.316483 },
+    { primaryName: "C 422 HELIPORT", aliases: [], ICAO: ["RK3R"], type: "Heliport", mgrs: "52S DH 08210 31405", lat: 38.226100, lng: 127.952017 },
+    { primaryName: "C 423 HELIPORT", aliases: [], ICAO: ["RK84"], type: "Heliport", mgrs: "52S DH 65207 22022", lat: 38.145333, lng: 128.602950 },
+    { primaryName: "C 426 HELIPORT", aliases: [], ICAO: ["RK23"], type: "Heliport", mgrs: "52S DG 11110 84650", lat: 37.804950, lng: 127.998583 },
+    { primaryName: "C 427 HELIPORT", aliases: [], ICAO: ["RK3U"], type: "Heliport", mgrs: "52S EG 22223 34360", lat: 37.354850, lng: 129.250100 },
+    { primaryName: "C 428 HELIPORT", aliases: [], ICAO: ["RK3V"], type: "Heliport", mgrs: "52S DH 29792 19043", lat: 38.115750, lng: 128.195483 },
+    { primaryName: "C 433 HELIPORT", aliases: [], ICAO: ["RK3X"], type: "Heliport", mgrs: "52S DG 08638 31589", lat: 37.326533, lng: 127.968817 },
+    { primaryName: "C 434 HELIPORT", aliases: [], ICAO: ["RK85"], type: "Heliport", mgrs: "52S DH 55799 38662", lat: 38.290983, lng: 128.493783 },
+    { primaryName: "C 436 HELIPORT", aliases: [], ICAO: ["RK14"], type: "Heliport", mgrs: "52S DG 09053 38243", lat: 37.386483, lng: 127.972150 },
+    { primaryName: "C 438 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DH 52782 19369", lat: 38.120939, lng: 128.461322 },
+    { primaryName: "C 440 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DH 45651 71033", lat: 38.586111, lng: 128.375989 },
+    { primaryName: "C 441 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DG 70354 78807", lat: 37.756100, lng: 128.663447 },
+    { primaryName: "C 442 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DG 71410 78043", lat: 37.749250, lng: 128.675464 },
+    { primaryName: "C 443 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DG 88418 83255", lat: 37.796603, lng: 128.868456 },
+    { primaryName: "C 451 HELIPORT", aliases: [], ICAO: ["RK3Y"], type: "Heliport", mgrs: "52S DG 06607 37609", lat: 37.380531, lng: 127.945094 },
+
+{ primaryName: "G 501", aliases: [], ICAO: ["RKRY"], type: "Site", mgrs: "52S CG 42707 28369", lat: 37.288653, lng: 127.225539 },
+    { primaryName: "H 502 HELIPORT", aliases: [], ICAO: ["RK96"], type: "Heliport", mgrs: "52S CF 63488 18473", lat: 36.301606, lng: 127.479606 },
+    { primaryName: "C 503 HELIPORT", aliases: [], ICAO: ["RK6Q"], type: "Heliport", mgrs: "52S CF 60920 32576", lat: 36.428333, lng: 127.448481 },
+    { primaryName: "G 505", aliases: [], ICAO: ["RKUC"], type: "Site", mgrs: "52S CF 47566 48719", lat: 36.571769, lng: 127.296378 },
+    { primaryName: "H 508 HELIPORT", aliases: [], ICAO: ["RK97"], type: "Heliport", mgrs: "52S CF 40116 73882", lat: 36.797283, lng: 127.207906 },
+    { primaryName: "G 510 I CHEON", aliases: [], ICAO: ["RKRN"], type: "Site", mgrs: "52S CG 64423 18117", lat: 37.199689, lng: 127.472300 },
+    { primaryName: "C 510 HELIPORT", aliases: [], ICAO: ["RK4C"], type: "Heliport", mgrs: "52S CF 71701 75749", lat: 36.818919, lng: 127.561497 },
+    { primaryName: "A-511", aliases: [], ICAO: ["RKSG"], type: "Site", mgrs: "52S CF 24733 92497", lat: 36.962272, lng: 127.031261 },
+    { primaryName: "C 512 HELIPORT", aliases: [], ICAO: ["RK4D"], type: "Heliport", mgrs: "52S CF 36198 87521", lat: 36.919508, lng: 127.161072 },
+    { primaryName: "C 514 HELIPORT", aliases: [], ICAO: ["RK4F"], type: "Heliport", mgrs: "52S BF 58337 72524", lat: 36.767717, lng: 126.292472 },
+    { primaryName: "C 517 HELIPORT", aliases: [], ICAO: ["RK4H"], type: "Heliport", mgrs: "52S BF 83765 91622", lat: 36.945869, lng: 126.571664 },
+    { primaryName: "C 518 HELIPORT", aliases: [], ICAO: ["RK4J"], type: "Heliport", mgrs: "52S CG 37658 03855", lat: 37.066922, lng: 127.173928 },
+    { primaryName: "C 519 HELIPORT", aliases: [], ICAO: ["RK4K"], type: "Heliport", mgrs: "52S CG 08948 19353", lat: 37.201122, lng: 126.847231 },
+    { primaryName: "C 521 HELIPORT", aliases: [], ICAO: ["RK4M"], type: "Heliport", mgrs: "52S CF 41707 79724", lat: 36.850186, lng: 127.224519 },
+    { primaryName: "C 523 HELIPORT", aliases: [], ICAO: ["RK4N"], type: "Heliport", mgrs: "52S BF 78734 24216", lat: 36.337600, lng: 126.534647 },
+    { primaryName: "G 526", aliases: [], ICAO: ["RK50"], type: "Site", mgrs: "52S BF 90494 51664", lat: 36.587483, lng: 126.658142 },
+    { primaryName: "C 524 HELIPORT", aliases: [], ICAO: ["RK68"], type: "Heliport", mgrs: "52S BF 77909 20108", lat: 36.300414, lng: 126.526631 },
+    { primaryName: "C 528 HELIPORT", aliases: [], ICAO: ["RK4P"], type: "Heliport", mgrs: "52S BF 77909 20108", lat: 36.563533, lng: 127.277825 },
+    { primaryName: "G 530 TAE AN", aliases: [], ICAO: ["RK49"], type: "Site", mgrs: "52S BF 61575 71200", lat: 36.756619, lng: 126.329117 },
+    { primaryName: "C 531 HELIPORT", aliases: [], ICAO: ["RK4Q"], type: "Heliport", mgrs: "52S CG 63845 18810", lat: 37.205850, lng: 127.465667 },
+    { primaryName: "G 532", aliases: [], ICAO: ["RK51"], type: "Site", mgrs: "52S CF 46564 45389", lat: 36.541600, lng: 127.285853 },
+    { primaryName: "C 533 HELIPORT", aliases: [], ICAO: ["RK88"], type: "Heliport", mgrs: "52S CG 38875 24334", lat: 37.251639, lng: 127.183206 },
+    { primaryName: "G 536", aliases: [], ICAO: ["RKUL"], type: "Site", mgrs: "52S CF 30272 15263", lat: 36.267400, lng: 127.110522 },
+    { primaryName: "C 551 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CG 15714 25291", lat: 37.255964, lng: 126.921944 },
+    { primaryName: "C 555 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CG 42530 26392", lat: 37.270808, lng: 127.223961 },
+    { primaryName: "C 560 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CF 51909 29329", lat: 36.397719, lng: 127.348622 },
+    { primaryName: "C 561 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CF 51630 30776", lat: 36.410722, lng: 127.345231 },
+    { primaryName: "C 565 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CF 52843 31249", lat: 36.415161, lng: 127.358667 },
+
+    { primaryName: "G 603 YONGJU HIGHWAY STRIP", aliases: [], ICAO: [], type: "Site", mgrs: "52S DF 62467 76978", lat: 36.837944, lng: 128.579075 },
+    { primaryName: "G 605", aliases: [], ICAO: ["RK6O"], type: "Site", mgrs: "52S DG 30672 13219", lat: 37.162811, lng: 128.219161 },
+    { primaryName: "G 607", aliases: [], ICAO: [], type: "Site", mgrs: "52S DG 53373 13853", lat: 37.169928, lng: 128.474800 },
+    { primaryName: "H 608 HELICOPTER LANDING SITE", aliases: [], ICAO: ["RK98"], type: "Landing Site", mgrs: "52S DE 36937 94292", lat: 36.091217, lng: 128.299500 },
+    { primaryName: "G 608", aliases: [], ICAO: [], type: "Site", mgrs: "52S EF 06610 43793", lat: 36.539517, lng: 129.073853 },
+    { primaryName: "H 609 HELICOPTER LANDING SITE", aliases: [], ICAO: ["RK99"], type: "Landing Site", mgrs: "52S DE 36945 94498", lat: 36.093069, lng: 128.299564 },
+    { primaryName: "G 610", aliases: [], ICAO: ["RKUK"], type: "Site", mgrs: "52S CF 72082 96137", lat: 37.002708, lng: 127.562336 },
+    { primaryName: "C 620 HELIPORT", aliases: [], ICAO: ["RK69"], type: "Heliport", mgrs: "52S CF 40962 20149", lat: 36.313242, lng: 127.228464 },
+    { primaryName: "C 621 HELIPORT", aliases: [], ICAO: ["RK6C"], type: "Heliport", mgrs: "52S CF 29525 15111", lat: 36.265900, lng: 127.102231 },
+
+{ primaryName: "H 704 HELIPORT", aliases: [], ICAO: ["RK4U"], type: "Heliport", mgrs: "52S CE 02088 83488", lat: 35.975764, lng: 126.804936 },
+    { primaryName: "C 709 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CE 32806 82018", lat: 35.968269, lng: 127.145764 },
+    { primaryName: "G 710", aliases: [], ICAO: ["RK6D"], type: "Site", mgrs: "52S CE 20970 12745", lat: 35.341947, lng: 127.029975 },
+    { primaryName: "G 712", aliases: [], ICAO: ["RK60"], type: "Site", mgrs: "52S BE 72294 09848", lat: 35.305925, lng: 126.495544 },
+    { primaryName: "C 715 HELIPORT", aliases: [], ICAO: ["RK5H"], type: "Heliport", mgrs: "52S CD 96953 72799", lat: 34.992558, lng: 127.870872 },
+    { primaryName: "C 716 HELIPORT", aliases: [], ICAO: ["RK5J"], type: "Heliport", mgrs: "52S CD 38167 58333", lat: 34.854464, lng: 127.229744 },
+    { primaryName: "C 719 HELIPORT", aliases: [], ICAO: ["RK5M"], type: "Heliport", mgrs: "52S CE 31417 71812", lat: 35.876069, lng: 127.132536 },
+    { primaryName: "C 722 HELIPORT", aliases: [], ICAO: ["RK5O"], type: "Heliport", mgrs: "52S CD 18686 88820", lat: 35.125933, lng: 127.010117 },
+    { primaryName: "C 723 HELIPORT", aliases: [], ICAO: ["RK5P"], type: "Heliport", mgrs: "52S BE 82073 03414", lat: 35.250147, lng: 126.604728 },
+    { primaryName: "C 724 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S CE 23995 86279", lat: 36.005117, lng: 127.047158 },
+
+    { primaryName: "G 801", aliases: [], ICAO: ["RKUY"], type: "Site", mgrs: "52S DE 83716 86766", lat: 36.025261, lng: 128.819272 },
+    { primaryName: "G 802", aliases: [], ICAO: ["RKD1"], type: "Site", mgrs: "52S DE 65933 01704", lat: 35.257864, lng: 128.625500 },
+    { primaryName: "H 805 HELIPORT", aliases: [], ICAO: ["RK57"], type: "Heliport", mgrs: "52S DE 63134 66390", lat: 35.841006, lng: 128.591781 },
+    { primaryName: "C 807 HELIPORT", aliases: [], ICAO: ["RK18"], type: "Heliport", mgrs: "52S ED 17734 94262", lat: 35.191186, lng: 129.194792 },
+    { primaryName: "H 809 HELIPORT", aliases: [], ICAO: ["RK4W"], type: "Heliport", mgrs: "52S ED 13565 94900", lat: 35.197008, lng: 129.149017 },
+    { primaryName: "H 810 HELIPAD", aliases: [], ICAO: ["RK4X"], type: "Helipad", mgrs: "52S DE 99264 19907", lat: 35.422578, lng: 128.991900 },
+    { primaryName: "C 811 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DE 53098 37302", lat: 35.578317, lng: 128.482344 },
+    { primaryName: "H 811 HELIPAD", aliases: [], ICAO: ["RK4Y"], type: "Helipad", mgrs: "52S DE 71878 55159", lat: 35.740031, lng: 128.689006 },
+    { primaryName: "G 814", aliases: [], ICAO: ["RKPS"], type: "Site", mgrs: "52S DD 15276 83265", lat: 35.088611, lng: 128.070556 },
+    { primaryName: "G 815 POHANG", aliases: [], ICAO: ["RKTH"], type: "Site", mgrs: "52S EE 37892 82691", lat: 35.987939, lng: 129.420372 },
+    { primaryName: "C 824 HELIPORT", aliases: [], ICAO: ["RK5Y"], type: "Heliport", mgrs: "52S DE 37815 73290", lat: 35.901928, lng: 128.310900 },
+    { primaryName: "C 825 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DE 66401 01628", lat: 35.257203, lng: 128.630653 },
+    { primaryName: "C 826 HELIPORT", aliases: [], ICAO: ["RK5Z"], type: "Heliport", mgrs: "52S DD 48209 85705", lat: 35.112853, lng: 128.431661 },
+    { primaryName: "C 828 HELIPORT", aliases: [], ICAO: ["RK6B", "RK8B"], type: "Heliport", mgrs: "52S DE 68616 69432", lat: 35.868614, lng: 128.652372 },
+    { primaryName: "C 830 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S DE 61313 79205", lat: 35.956469, lng: 128.570994 },
+    { primaryName: "C 832 HELIPORT", aliases: [], ICAO: [], type: "Heliport", mgrs: "52S EE 37290 35388", lat: 35.561464, lng: 129.411475 },
+    { primaryName: "H 832 HELIPAD", aliases: [], ICAO: ["RK5C"], type: "Helipad", mgrs: "52S DE 47676 83451", lat: 35.994122, lng: 128.419497 },
+  
+    { primaryName: "H 829", aliases: [], type: "Mapped Site", mgrs: "52S EE 33716 92267", lat: 36.07441, lng: 129.37444 },
+    { primaryName: "H 830", aliases: [], type: "Mapped Site", mgrs: "52S ED 04951 91429", lat: 35.16578, lng: 129.05437 },
+    { primaryName: "C 832 HELIPORT", aliases: [], type: "Heliport", mgrs: "52S *", lat: 35.561464, lng: 129.411475 },
+    { primaryName: "H 832", aliases: [], ICAO:["RK5C"], type: "Mapped Site", mgrs: "52S DE 47679 83452", lat: 35.99412, lng: 128.41954 },
+    { primaryName: "H 855", aliases: [], type: "Mapped Site", mgrs: "52S DE 38292 56281", lat: 35.74861, lng: 128.31750 },
+   
+   
+    { primaryName: "GIMHAE (K-1)", aliases:[], ICAO: ["RKPK"], type: "Airbase", mgrs: "52S DD 938 937", lat: 35.18065, lng: 128.93800 },
+    { primaryName: "DAEGU (K-2)", aliases: [], ICAO:["RKTG"], type: "Airbase", mgrs: "52S DE 688 727", lat: 35.89408, lng: 128.65890 },
+    { primaryName: "POHANG (K-3)", aliases:[], ICAO: ["RKTH"], type: "Airbase", mgrs: "52S EE 381 827", lat: 35.98769, lng: 129.42051 },
+    { primaryName: "SACHEON (K-4)", aliases:[], ICAO: ["RKPS"], type: "Airbase", mgrs: "52S DD 161 838", lat: 35.09351, lng: 128.07953 },
+    { primaryName: "GUNSAN (K-8)", aliases:[], ICAO: ["RKJK"], type: "Airbase", mgrs: "52S BE 853 759", lat: 35.90377, lng: 126.61590 },
+    { primaryName: "JINHAE (K-10)", aliases:[], ICAO: ["RKPE"], type: "Airbase", mgrs: "52S DD 722 891", lat: 35.14058, lng: 128.69618 },
+    { primaryName: "ULSAN (K-11)", aliases: [], ICAO:["RCKU"], type: "Airbase", mgrs: "52S EE 320 388", lat: 35.59241, lng: 129.35324 },
+    { primaryName: "SUWON (K-13)", aliases:[], ICAO: ["RKSW"], type: "Airbase", mgrs: "52S CG 233 232", lat: 37.23942, lng: 127.00695 },
+    { primaryName: "GIMPO (K-14)", aliases:[], ICAO: ["RKSS"], type: "Airbase", mgrs: "52S CG 053 590", lat: 37.55872, lng: 126.79047 },
+    { primaryName: "MOKPO (K-15)", aliases: [], ICAO:["RKJM"], type: "Airbase", mgrs: "52S BD 609 496", lat: 34.77685, lng: 126.44779 },
+    { primaryName: "SEOUL AB (K-16)", aliases:["SONGNAM"], ICAO: ["RKSM"], type: "Airbase", mgrs: "52S CG 163 552", lat: 37.44600, lng: 127.11420 },
+    { primaryName: "GANGNEUNG (K-18)", aliases:[], ICAO: ["RKNY"], type: "Airbase", mgrs: "52S DG 953 787", lat: 37.75353, lng: 128.94387 },
+    { primaryName: "JEJU (K-40)", aliases: [], ICAO:["RKPC"], type: "Airbase", mgrs: "52S BC 678 107", lat: 33.51230, lng: 126.49263 },
+    { primaryName: "WONJU (K-46)", aliases:[], ICAO: ["RKNW"], type: "Airbase", mgrs: "52S DG 083 444", lat: 37.43802, lng: 127.96042 },
+    { primaryName: "OSAN (K-55)", aliases: [], ICAO:["RKSO"], type: "Airbase", mgrs: "52S CG 223 067", lat: 37.09157, lng: 127.02948 },
+    { primaryName: "GWANGJU (K-57)", aliases:[], ICAO: ["RKJJ"], type: "Airbase", mgrs: "52S CD 030 917", lat: 35.12625, lng: 126.80892 },
+    { primaryName: "YECHEON (K-58)", aliases: [], ICAO:["RKTY"], type: "Airbase", mgrs: "52S DF 509 563", lat: 36.63185, lng: 128.35488 },
+    { primaryName: "CHEONGJU (K-59)", aliases:[], ICAO: ["RKTU"], type: "Airbase", mgrs: "52S CE 659 643", lat: 36.71648, lng: 127.49845 },
+    { primaryName: "SEONGMU (K-60)", aliases: [], ICAO:["RK70"], type: "Airbase", mgrs: "52S CF 656 481", lat: 36.56817, lng: 127.49463 },
+    { primaryName: "CHUNGJU (K-75)", aliases: [], ICAO:["RK75", "JUNGWON"], type: "Airbase", mgrs: "52S DF 008 987", lat: 37.03000, lng: 127.88523 },
+    { primaryName: "SEOSAN (K-76)", aliases: [], ICAO:["RK76"], type: "Airbase", mgrs: "52S BF 617 577", lat: 36.70437, lng: 126.48612 },
+
+];
+// --- AUTO-MGRS PATCH (Self-Healing Protocol) ---
+// This sweeps the array and automatically calculates missing MGRS coordinates from Lat/Long
+inventory.forEach(site => {
+    // Detect missing, generic, or incomplete MGRS strings
+    if (site.mgrs === "52S *" || site.mgrs === "N/A" || !site.mgrs || site.mgrs.trim() === "") {
+        try {
+            // mgrs.forward converts [longitude, latitude] into an MGRS string. 
+            // The '5' requests 1-meter precision (10-digit grid).
+            const rawMgrs = mgrs.forward([site.lng, site.lat], 5);
+            
+            // Format it to Eighth Army standard spacing: "52S CG 12345 67890"
+            site.mgrs = rawMgrs.replace(/^(\d{1,2}[A-Z])([A-Z]{2})(\d{5})(\d{5})$/, "$1 $2 $3 $4");
+            
+        } catch(e) {
+            console.warn(`[SYSTEM ALARM] MGRS conversion failed for ${site.primaryName}`);
+        }
+    }
+});
+// ------------------------------------------------
+
+        const darkTactical = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 18, attribution: '&copy; CARTO' });
+        const satelliteView = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 18, attribution: 'Tiles &copy; Esri' });
+
+        const map = L.map('map', { center: [37.5, 127.0], zoom: 8, layers: [satelliteView] });
+        L.control.layers({ "Satellite Optics": satelliteView,"Dark Tactical": darkTactical }).addTo(map);
+
+        let markers = [];
+        let targetMarker = null; 
+
+function renderData(data) {
+    const list = document.getElementById('resultsList');
+    if (!list) return; // Defensive check
+    
+    list.innerHTML = ''; // Clear the panel
+    
+    // Remove old tactical markers from map
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    data.forEach(site => {
+        // Step 1: Process the array safely. If empty, output 'None'
+        const aliasDisplay = (site.aliases && site.aliases.length > 0) ? site.aliases.join(', ') : 'None';
+        // Checks if ICAO exists and has data. If yes, joins them. If no, displays 'None'.
+        const icaoDisplay = (site.ICAO && site.ICAO.length > 0) ? site.ICAO.join(', ') : 'None';
+        // Step 2: Build the Sidebar Card
+        const card = document.createElement('div');
+        card.className = 'lz-card';
+        card.innerHTML = `
+                <div class="lz-title">${site.primaryName}</div>
+                <div class="lz-detail" style="color: #aaa; font-style: italic;">Aliases: ${aliasDisplay}</div>
+                <div class="lz-detail" style="color: #4CAF50; font-weight: bold;">ICAO: ${icaoDisplay}</div>
+                <div class="lz-detail">MGRS: ${site.mgrs}</div>
+                <div class="lz-detail">L/L: ${site.lat.toFixed(4)}, ${site.lng.toFixed(4)}</div>
+        `;
+        
+        // Step 3: Deploy Marker & Bind Popup IMMEDIATELY
+        const icon = L.divIcon({ html: '<div class="tactical-marker" style="width:12px; height:12px;"></div>', className: '' });
+        const marker = L.marker([site.lat, site.lng], {icon: icon}).addTo(map);
+        // 2. Attach the Expanded Popup
+        marker.bindPopup(
+            `<b>${site.primaryName}</b><br>
+            <span style="color: #aaa; font-style: italic;">Aliases: ${aliasDisplay}</span><br>
+            <span style="color: #4CAF50; font-weight: bold;">ICAO: ${icaoDisplay}</span><br>
+            <span style="color: #4CAF50;">Grid: ${site.mgrs}</span>`, 
+            { 
+                maxWidth: 600,     // Allows the popup to stretch for long names
+                minWidth: 200,     // Prevents it from being too narrow
+                className: 'tactical-popup' // Links to the CSS rule below
+            }
+        );
+        markers.push(marker);
+
+        // Sidebar click interaction
+        card.onclick = () => {
+            map.flyTo([site.lat, site.lng], 15);
+            marker.bindPopup(`<b>${site.primaryName}</b><br>${site.mgrs}`).openPopup();
+        };
+        
+        // CRITICAL: Push the card into the sidebar
+        list.appendChild(card);
+    });
+}
+
+function processInput() {
+            const rawInput = document.getElementById('searchInput').value.trim();
+            const statusBox = document.getElementById('conversionStatus');
+            
+            if(targetMarker) { map.removeLayer(targetMarker); targetMarker = null; }
+
+            if (rawInput === '') {
+                statusBox.innerHTML = `System Ready. Monitoring Frequencies.`;
+                renderData(inventory);
+                return; 
+            }
+
+            const llMatch = rawInput.match(/^(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)$/);
+            if(llMatch) {
+                const lat = parseFloat(llMatch[1]);
+                const lng = parseFloat(llMatch[2]);
+                statusBox.innerHTML = `Coordinate Pair Identified: ${lat}, ${lng}`;
+                dropTargetMarker(lat, lng, `Manual Entry`);
+                return;
+            }
+
+            // --- MULTI-TARGET ARRAY ---
+            const searchTerms = rawInput.split(',')
+                .map(term => term.replace(/[^A-Z0-9]/gi, '').toUpperCase())
+                .filter(term => term !== '');
+
+            // --- EXACT MGRS CHECK ---
+            if (searchTerms.length === 1) {
+                const singleTerm = searchTerms[0];
+                const mgrsPattern = /^[0-9]{1,2}[A-Z]{3}[0-9]{2,10}$/;
+                if(mgrsPattern.test(singleTerm)) {
+                    try {
+                        const coords = mgrs.toPoint(singleTerm);
+                        statusBox.innerHTML = `MGRS Grid Locked: ${singleTerm}`;
+                        dropTargetMarker(coords[1], coords[0], `Grid: ${singleTerm}`);
+                        return;
+                    } catch(e) {}
+                }
+            }
+
+            // --- BULLETPROOF FILTER ENGINE ---
+            const filtered = inventory.filter(site => {
+                const searchableData = (
+                    (site.primaryName || "") + 
+                    (site.aliases ? site.aliases.join('') : "") + 
+                    (site.ICAO ? site.ICAO.join('') : "") + 
+                    (site.mgrs || "") + 
+                    (site.type || "")
+                ).replace(/[^A-Z0-9]/gi, '').toUpperCase();
+                
+                return searchTerms.some(term => searchableData.includes(term));
+            });
+
+            if (filtered.length > 0) {
+                statusBox.innerHTML = `Multi-Target Match: ${filtered.length} Identifiers Acquired.`;
+                renderData(filtered);
+            } else {
+                statusBox.innerHTML = `<span style="color:var(--error);">No Data Found for "${rawInput}"</span>`;
+                renderData(inventory); 
+            }
+        }
+        function dropTargetMarker(lat, lng, label) {
+            const icon = L.divIcon({ html: '<div class="target-marker" style="width:16px; height:16px;"></div>', className: '' });
+            targetMarker = L.marker([lat, lng], {icon: icon}).addTo(map)
+                .bindPopup(`<b>Tactical Target</b><br>${label}<br>${lat.toFixed(5)}, ${lng.toFixed(5)}`)
+                .openPopup();
+            map.flyTo([lat, lng], 15);
+        }
+
+        // --- DATA INTEGRITY: AUTO-SORTER PATCH ---
+        inventory.forEach(site => {
+            if (!site.ICAO) site.ICAO = []; 
+            if (site.aliases && site.aliases.length > 0) {
+                const icaoCodes = site.aliases.filter(alias => alias.startsWith("RK"));
+                const normalAliases = site.aliases.filter(alias => !alias.startsWith("RK"));
+                site.ICAO = site.ICAO.concat(icaoCodes);
+                site.aliases = normalAliases;
+            }
+        });
+        // -----------------------------------------
+
+        // --- MASTER BOOT SEQUENCE ---
+        renderData(inventory);
+    </script>
+</body>
+</html>
