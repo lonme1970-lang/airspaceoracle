@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>TALAS Light — Notional Airspace Viewer</title>
+<meta name="description" content="Synthetic-data discussion viewer: plan map, terrain-aware section, 3D view and four-question decision cards. Not doctrine. Not a clearance."/>
+<style>
+:root{--mono:'Share Tech Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;--sans:Inter,system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+--bg:#0a0d12;--s1:#111520;--s2:#161c2a;--s3:#1c2436;--bd:rgba(100,140,200,.16);--tx:#d4dce8;--mu:#8696ac;--fa:#3d4d60;
+--pri:#00c8e0;--pridim:rgba(0,200,224,.14);--grn:#00e87a;--org:#ff9500;--red:#ff4455;--pur:#b060ff;--gold:#ffd060;--blue:#4b8fff;--map:#0d131c;--halo:#0a0d12}
+[data-theme=light]{--bg:#eef2f7;--s1:#fff;--s2:#f5f8fb;--s3:#e8eef5;--bd:rgba(60,80,120,.18);--tx:#1a2030;--mu:#566880;--fa:#b0bcc8;--pri:#007a8c;--pridim:rgba(0,122,140,.1);--grn:#007a40;--org:#b06000;--red:#c0003a;--pur:#7030b0;--gold:#8a6000;--blue:#2a62c4;--map:#dfe7ef;--halo:#fff}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:var(--sans);font-size:14px;background:var(--bg);color:var(--tx);line-height:1.45;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+.hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 18px;background:var(--s1);border-bottom:1px solid var(--bd);height:58px}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.brand b{font-family:var(--mono);color:var(--pri);letter-spacing:.08em;font-size:17px;font-weight:400;white-space:nowrap}
+.brand small{display:block;color:var(--mu);font-size:11px;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tags{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.tag{font-family:var(--mono);font-size:11px;padding:3px 9px;border-radius:99px;border:1px solid var(--bd);color:var(--mu);letter-spacing:.05em;white-space:nowrap}
+.tag.warn{color:var(--org);border-color:rgba(255,149,0,.45);background:rgba(255,149,0,.08)}
+.btn{background:var(--s2);border:1px solid var(--bd);color:var(--mu);padding:6px 11px;border-radius:7px;min-height:32px;font-size:13px;transition:.15s}
+.btn:hover{color:var(--tx);background:var(--s3)}
+.btn.on{color:var(--pri);border-color:var(--pri);background:var(--pridim)}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 392px;height:calc(100vh - 58px);min-height:640px}
+.left{display:grid;grid-template-rows:auto minmax(0,1.25fr) minmax(0,1fr);min-width:0;border-right:1px solid var(--bd)}
+.kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;padding:10px 12px;background:var(--s1);border-bottom:1px solid var(--bd)}
+.kpi{background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:6px 10px;min-width:0}
+.kpi i{display:block;font-style:normal;font-size:10.5px;letter-spacing:.07em;text-transform:uppercase;color:var(--mu);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kpi b{font-family:var(--mono);font-weight:400;font-size:21px}
+.pane{position:relative;min-height:0;min-width:0;overflow:hidden;background:var(--map)}
+.pane h2{position:absolute;top:8px;left:10px;z-index:3;font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mu);background:var(--s1);border:1px solid var(--bd);padding:3px 9px;border-radius:99px;pointer-events:none}
+.pane svg.fill{width:100%;height:100%;display:block;touch-action:none}
+.bottom{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);border-top:1px solid var(--bd);min-height:0}
+.bottom .pane+.pane{border-left:1px solid var(--bd)}
+#c3{width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+.wm{position:absolute;right:10px;bottom:8px;z-index:3;font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--org);opacity:.8;pointer-events:none}
+.note{position:absolute;left:10px;bottom:8px;z-index:3;font-size:11px;color:var(--mu);max-width:70%;pointer-events:none}
+.tools{position:absolute;top:6px;right:8px;z-index:4;display:flex;gap:6px}
+.right{overflow-y:auto;background:var(--s1);min-height:0}
+details{border-bottom:1px solid var(--bd)}
+summary{list-style:none;cursor:pointer;padding:11px 16px;font-size:11.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--pri);display:flex;justify-content:space-between;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary::after{content:'+';color:var(--mu);font-size:16px}
+details[open]>summary::after{content:'–'}
+.body{padding:2px 16px 14px}
+.cardhead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.cardhead h3{font-size:16px;font-weight:600;line-height:1.2}
+.cardhead p{font-size:12px;color:var(--mu)}
+.q{border:1px solid var(--bd);border-left-width:4px;border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--s2)}
+.q .k{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:3px}
+.q .k span{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;color:var(--mu)}
+.q .v{font-size:13px}
+.q .v small{color:var(--mu);display:block;font-size:12px;margin-top:2px}
+.q.known{border-left-color:var(--grn)}.q.aged{border-left-color:var(--org)}.q.unknown{border-left-color:var(--red)}.q.undecided{border-left-color:var(--pur)}
+.chip{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;padding:1px 8px;border-radius:99px;border:1px solid currentColor;white-space:nowrap}
+.chip.known{color:var(--grn)}.chip.aged{color:var(--org)}.chip.unknown{color:var(--red)}.chip.undecided{color:var(--pur)}
+.sum{font-size:12px;color:var(--mu);margin:2px 0 8px}
+.sum b{color:var(--tx)}
+.foot{font-size:11px;color:var(--mu);border-top:1px dashed var(--bd);padding-top:7px;margin-top:4px}
+.touch{display:flex;gap:6px;align-items:baseline;margin:3px 0;font-size:12.5px}
+.dot{width:9px;height:9px;border-radius:50%;display:inline-block;flex:none;transform:translateY(0)}
+.st{font-family:var(--mono);font-size:10.5px;padding:0 6px;border-radius:4px;border:1px solid currentColor;margin-left:auto;white-space:nowrap}
+.st.coord{color:var(--red)}.st.sep{color:var(--org)}.st.clear{color:var(--grn)}
+.row{display:flex;align-items:center;gap:10px;margin:9px 0}
+.row label{font-size:12.5px;color:var(--mu);flex:0 0 118px}
+.row input[type=range]{flex:1;accent-color:var(--pri)}
+.row output{font-family:var(--mono);font-size:12px;min-width:52px;text-align:right}
+.seg{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 4px}
+.chk{display:flex;align-items:center;gap:8px;font-size:13px;margin:6px 0}
+.chk input{accent-color:var(--pri);width:16px;height:16px}
+.hint{font-size:11.5px;color:var(--mu);margin-top:3px}
+.dec{border:1px solid var(--bd);border-radius:8px;padding:8px 10px;margin-bottom:8px;background:var(--s2)}
+.dec .t{display:flex;gap:8px;align-items:flex-start;font-size:13px;font-weight:500}
+.dec .n{font-family:var(--mono);color:var(--pur);flex:none}
+.dec .w{font-size:12px;color:var(--mu);margin:3px 0 6px}
+.dec .c{display:flex;gap:6px}
+.dec select{background:var(--s3);border:1px solid var(--bd);border-radius:6px;padding:3px 6px;font-size:12px;flex:none}
+.dec input[type=text]{flex:1;min-width:0;background:var(--s3);border:1px solid var(--bd);border-radius:6px;padding:3px 8px;font-size:12px}
+.dec.live{border-color:var(--pur)}
+.legend{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;font-size:12px}
+.legend span{display:flex;gap:7px;align-items:center}
+.sw{width:14px;height:10px;border-radius:2px;display:inline-block;flex:none}
+.ents{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.disc{font-size:11px;color:var(--mu);padding:12px 16px 18px;line-height:1.5}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--s3);border:1px solid var(--pri);color:var(--tx);padding:8px 16px;border-radius:8px;font-size:13px;z-index:50;opacity:0;pointer-events:none;transition:.25s}
+.toast.show{opacity:1}
+@media(min-width:1001px){body{overflow:hidden}.left{min-height:0;height:100%;overflow:hidden}.bottom{overflow:hidden}}
+#c3{position:absolute;inset:0}
+@media(max-width:1000px){body{overflow:auto}.app{grid-template-columns:1fr;height:auto}.left{grid-template-rows:auto 420px 320px;border-right:0}.bottom{grid-template-columns:1fr;grid-template-rows:300px 300px}.bottom .pane+.pane{border-left:0;border-top:1px solid var(--bd)}.kpis{grid-template-columns:repeat(2,1fr)}.right{overflow:visible}.hdr{height:auto;flex-wrap:wrap}}
+</style>
+</head>
+<body>
+<header class="hdr">
+ <div class="brand">
+  <svg width="34" height="34" viewBox="0 0 36 36" aria-hidden="true"><rect width="36" height="36" rx="8" fill="rgba(0,200,224,.08)" stroke="rgba(0,200,224,.35)"/><path d="M5 27 L12 19 L18 23 L25 13 L31 20" fill="none" stroke="#00c8e0" stroke-width="1.5"/><circle cx="21" cy="17" r="5" fill="none" stroke="#ff9500" stroke-width="1.2" stroke-dasharray="2 2"/><circle cx="21" cy="17" r="1.6" fill="#00e87a"/></svg>
+  <div><b>TALAS LIGHT · NOTIONAL VIEWER</b><small>One activity · four questions · see what the picture does not know</small></div>
+ </div>
+ <div class="tags">
+  <span class="tag warn">SYNTHETIC DATA · NOT DOCTRINE · NOT A CLEARANCE</span>
+  <button class="btn" id="shareBtn" title="Copy a link that restores this scenario">Copy link</button>
+  <button class="btn" id="themeBtn">Light / Dark</button>
+ </div>
+</header>
+<main class="app">
+ <section class="left">
+  <div class="kpis" id="kpis"></div>
+  <div class="pane" id="planPane">
+   <h2>Plan — where, and how sure</h2>
+   <div class="tools"><button class="btn" id="zin">+</button><button class="btn" id="zout">–</button><button class="btn" id="zreset">Reset</button><button class="btn" id="moveBtn" title="Drag constraints to test what they touch">Move constraints</button></div>
+   <svg class="fill" id="plan" aria-label="Plan view"></svg>
+   <div class="wm">NOTIONAL GEOMETRY</div>
+  </div>
+  <div class="bottom">
+   <div class="pane"><h2 id="secTitle">Section — height against terrain</h2>
+    <div class="tools"><button class="btn on" id="refAGL">AGL</button><button class="btn" id="refMSL">MSL</button></div>
+    <svg class="fill" id="sec" aria-label="Altitude section"></svg>
+    <div class="wm">NOTIONAL TERRAIN</div></div>
+   <div class="pane"><h2>3D — overlap a flat map hides</h2>
+    <canvas id="c3"></canvas>
+    <div class="note">Drag to rotate · wheel to zoom · click a marker. Prisms drawn flat at centroid terrain; the section is terrain-aware.</div></div>
+  </div>
+ </section>
+ <aside class="right">
+  <details open><summary>Decision card</summary><div class="body" id="card"></div></details>
+  <details open><summary>Scenario — stress the picture</summary><div class="body">
+   <div class="seg" id="presets"></div>
+   <label class="chk"><input type="checkbox" id="tPic" checked/> Picture link up</label>
+   <label class="chk"><input type="checkbox" id="tVox" checked/> Voice net up</label>
+   <label class="chk"><input type="checkbox" id="tGnss" checked/> GNSS / time good</label>
+   <div class="row"><label>Extra data age</label><input type="range" id="rAge" min="0" max="180" step="5" value="0"/><output id="oAge">0 s</output></div>
+   <div class="row"><label>Card → AGED at</label><input type="range" id="rTa" min="10" max="120" step="5" value="30"/><output id="oTa">30 s</output></div>
+   <div class="row"><label>Card → UNKNOWN at</label><input type="range" id="rTu" min="60" max="300" step="10" value="120"/><output id="oTu">120 s</output></div>
+   <p class="hint">The two thresholds are not doctrine. They are the dials the group has to set (Decision 4).</p>
+   <div class="row"><label>3D vertical scale</label><input type="range" id="rEx" min="1" max="10" step="0.5" value="4"/><output id="oEx">4×</output></div>
+   <label class="chk"><input type="checkbox" id="lTer" checked/> Terrain shading</label>
+   <label class="chk"><input type="checkbox" id="lLab" checked/> Labels</label>
+   <label class="chk"><input type="checkbox" id="lUnc" checked/> Position uncertainty</label>
+   <div class="hint">Select an object:</div><div class="ents" id="ents"></div>
+  </div></details>
+  <details open><summary>Decision register — what the concept has not settled</summary><div class="body">
+   <p class="hint" style="margin:0 0 8px">Purple outline = this decision is live on screen right now. Status and notes are for the discussion only.</p>
+   <div id="reg"></div>
+   <button class="btn" id="copyNotes">Copy discussion notes</button>
+  </div></details>
+  <details><summary>Legend and how to read</summary><div class="body">
+   <div class="legend" id="legend"></div>
+   <p class="hint" style="margin-top:10px"><b>NEEDS COORDINATION</b> = crosses laterally and overlaps vertically. <b>SEPARATED</b> = crosses laterally but vertical limits do not overlap (margin shown). It is not a denial, and SEPARATED is not a clearance.</p>
+  </div></details>
+  <p class="disc">TALAS Light is an experimentation concept, not approved doctrine. All positions, terrain, limits, role names and numbers on this page are synthetic placeholders chosen to expose decisions. Nothing here is an airspace control order, an engagement authorization, or a spectrum approval.</p>
+ </aside>
+</main>
+<div class="toast" id="toast"></div>
+<script>
+(function(){
+'use strict';
+var $=function(i){return document.getElementById(i)};
+var NS='http://www.w3.org/2000/svg';
+function cv(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function el(tag,at,par,txt){var e=document.createElementNS(NS,tag);for(var k in at)e.setAttribute(k,at[k]);if(txt!=null)e.textContent=txt;if(par)par.appendChild(e);return e}
+function clr(n){while(n.firstChild)n.removeChild(n.firstChild)}
+function size(e){var r=e.getBoundingClientRect();return[Math.max(r.width,50),Math.max(r.height,50)]}
+function fmt(n){return Math.round(n).toLocaleString('en-US')}
+
+/* ---------- NOTIONAL TERRAIN (ft MSL). Schematic ridge, not a real place. ---------- */
+function terrain(x,y){var d=(y-0.7*x+3)/1.22;return 450+2100*Math.exp(-(d*d)/32)+160*Math.sin(x/6)*Math.cos(y/5)+x*6}
+
+/* ---------- SYNTHETIC DATA. All names, roles, limits are placeholders. ---------- */
+var ACTS=[
+{id:'R1',name:'Rotary route R-1',kind:'Rotary',col:'#00c8e0',pts:[[6,30],[18,25],[30,22],[42,14],[54,8]],ref:'AGL',lo:50,hi:500,fix:.45,age:8,coord:'Brigade airspace element (placeholder)',appr:'Division airspace cell (placeholder)',net:'Net A'},
+{id:'U2',name:'UAS corridor U-2',kind:'UAS',col:'#4b8fff',pts:[[20,6],[26,12],[34,12],[40,19]],ref:'AGL',lo:200,hi:1500,fix:.6,age:20,coord:null,appr:null,net:'Net B'},
+{id:'F3',name:'Fixed-wing track F-3',kind:'Fixed-wing',col:'#00e87a',pts:[[2,6],[20,16],[40,26],[58,34]],ref:'MSL',lo:3500,hi:5500,fix:.5,age:5,coord:'Air component liaison (placeholder)',appr:'Alliance chain — UNDECIDED',net:'Net C'},
+{id:'I4',name:'Interceptor UAS area I-4',kind:'Counter-UAS',col:'#7fe0c0',pts:[[44,34],[50,31],[54,35],[48,38],[44,34]],ref:'AGL',lo:300,hi:2500,fix:.3,age:45,coord:'Local defence cell (placeholder)',appr:null,net:'Net D'}
+];
+var CONS=[
+{id:'C1',name:'Restricted operating zone',type:'ROZ',col:'--org',shape:{k:'poly',pts:[[30,17],[39,17],[39,26],[30,26]]},ref:'AGL',lo:0,hi:1000,owner:'Aviation unit (placeholder)',appr:'Brigade airspace element (placeholder)',edge:0,win:'Active by schedule'},
+{id:'C2',name:'Friendly EW constraint',type:'EW',col:'--red',shape:{k:'circ',c:[24,24],r:4.5},ref:'AGL',lo:0,hi:8000,owner:'EW element (placeholder)',appr:null,edge:2,win:'Window not published'},
+{id:'C3',name:'Fires / ACA-type area',type:'Fires',col:'--org',shape:{k:'poly',pts:[[44,22],[54,22],[54,32],[44,32]]},ref:'MSL',lo:1500,hi:9000,owner:'Fires cell (placeholder)',appr:'Fires cell (placeholder)',edge:0,win:'Time window (placeholder)'},
+{id:'C4',name:'Boundary line',type:'Boundary',col:'--gold',shape:{k:'line',pts:[[36,0],[40,20],[41,40]],w:.3},ref:'AGL',lo:0,hi:12000,owner:'Both adjacent units',appr:'Coordinate across (placeholder)',edge:0,win:'Standing'},
+{id:'C5',name:'Civil route / ATS-adjacent',type:'Civil',col:'--pur',shape:{k:'poly',pts:[[6,10],[16,10],[16,19],[6,19]]},ref:'MSL',lo:0,hi:4500,owner:'Civil ATS interface — UNDECIDED',appr:'ROK/US approval chain — UNDECIDED',edge:0,win:'Standing'}
+];
+var DECS=[
+{t:'Who approves, and who only coordinates?',w:'Every card shows a coordinator and an approver. When nobody is named the honest answer is UNKNOWN. Is a default owner acceptable, or must it be named per activity?',s:'Open',n:''},
+{t:'Default separation: lateral, altitude or time — and who owns the margin?',w:'SEPARATED here means only that vertical limits do not overlap. Who decides how much margin is enough, and is it ever a clearance?',s:'Open',n:''},
+{t:'How are friendly EW constraints published, and who deconflicts them?',w:'EW appears as a constraint with a fuzzy edge, not a lane. Is it published like any other constraint, and to whom?',s:'Open',n:''},
+{t:'When does a position become AGED, and when UNKNOWN?',w:'The two thresholds on the Scenario panel are dials, not doctrine. Who sets them, and do they differ by platform speed?',s:'Open',n:''},
+{t:'AGL or MSL — which reference, and who holds the terrain data?',w:'Rotary and UAS think AGL, fixed-wing and civil think MSL. Mixed references need terrain at the crossing point. Who owns that data?',s:'Open',n:''},
+{t:'What is authorised pre-brief, and what must be called live?',w:'If the picture is gone, static constraints on paper may still hold. Which ones, and who confirms the paper copy is current?',s:'Open',n:''},
+{t:'Partial failure: some have the picture, some only voice',w:'Mixed pictures are the likely case, not total loss. What do users with different pictures assume about each other?',s:'Open',n:''},
+{t:'Korea: civil/ATS interface and the alliance approval chain',w:'Short distances, mountains and dense civil traffic. Who talks to civil ATS, and how does the ROK/US chain approve?',s:'Open',n:''}
+];
+var STAT=['Open','Leaning','Agreed','Park'];
+var ST={sel:'R1',pic:true,vox:true,gnss:true,extra:0,ta:30,tu:120,ref:'AGL',ex:4,ter:true,lab:true,unc:true,move:false,preset:'Normal'};
+function ACT(){for(var i=0;i<ACTS.length;i++)if(ACTS[i].id===ST.sel)return ACTS[i];return ACTS[0]}
+
+/* ---------- geometry ---------- */
+function prep(a){var c=[0];for(var i=1;i<a.pts.length;i++)c.push(c[i-1]+Math.hypot(a.pts[i][0]-a.pts[i-1][0],a.pts[i][1]-a.pts[i-1][1]));a.cum=c;a.L=c[c.length-1]}
+ACTS.forEach(prep);
+function at(a,d){d=Math.max(0,Math.min(a.L,d));var i=1;while(i<a.cum.length-1&&a.cum[i]<d)i++;var s=a.cum[i]-a.cum[i-1]||1,t=(d-a.cum[i-1])/s,p=a.pts[i-1],q=a.pts[i];return{x:p[0]+(q[0]-p[0])*t,y:p[1]+(q[1]-p[1])*t,d:d}}
+function samples(a,n){var o=[];for(var i=0;i<=n;i++)o.push(at(a,a.L*i/n));return o}
+function dseg(p,a,b){var dx=b[0]-a[0],dy=b[1]-a[1],l=dx*dx+dy*dy,t=l?((p.x-a[0])*dx+(p.y-a[1])*dy)/l:0;t=Math.max(0,Math.min(1,t));return Math.hypot(a[0]+t*dx-p.x,a[1]+t*dy-p.y)}
+function dpoly(p,pts,closed){var m=1e9,n=pts.length;for(var i=0;i<(closed?n:n-1);i++)m=Math.min(m,dseg(p,pts[i],pts[(i+1)%n]));return m}
+function inPoly(p,pts){var c=false;for(var i=0,j=pts.length-1;i<pts.length;j=i++){var a=pts[i],b=pts[j];if((a[1]>p.y)!==(b[1]>p.y)&&p.x<(b[0]-a[0])*(p.y-a[1])/(b[1]-a[1])+a[0])c=!c}return c}
+function shp(c){var o=c.off||[0,0],s=c.shape,mv=function(p){return[p[0]+o[0],p[1]+o[1]]};
+ if(s.k==='circ')return{k:'circ',c:mv(s.c),r:s.r};
+ return{k:s.k,pts:s.pts.map(mv),w:s.w}}
+function hit(s,p,inf){if(s.k==='poly')return inPoly(p,s.pts)||dpoly(p,s.pts,true)<=inf;
+ if(s.k==='circ')return Math.hypot(p.x-s.c[0],p.y-s.c[1])<=s.r+inf;
+ return dpoly(p,s.pts,false)<=s.w+inf}
+function cen(s){if(s.k==='circ')return{x:s.c[0],y:s.c[1]};var x=0,y=0;s.pts.forEach(function(p){x+=p[0];y+=p[1]});return{x:x/s.pts.length,y:y/s.pts.length}}
+
+/* ---------- picture state ---------- */
+function ageEff(a){return a.age+ST.extra}
+function unc(a){return 0.3+0.03*ageEff(a)+(ST.gnss?0:1.5)}
+function evalAct(a){var S=samples(a,90),inf=0.2+0.35*unc(a),out=[];
+ CONS.forEach(function(c){var sh=shp(c),hits=[];S.forEach(function(p,i){if(hit(sh,p,inf+c.edge))hits.push(i)});
+  var r={c:c,hits:hits,st:'clear',gap:null};
+  if(hits.length){var best=1e9,ov=false;
+   hits.forEach(function(i){var p=S[i],t=terrain(p.x,p.y);
+    var alo=a.ref==='AGL'?a.lo+t:a.lo,ahi=a.ref==='AGL'?a.hi+t:a.hi,clo=c.ref==='AGL'?c.lo+t:c.lo,chi=c.ref==='AGL'?c.hi+t:c.hi;
+    var gap=Math.max(clo-ahi,alo-chi);if(gap<=0)ov=true;if(gap<best)best=gap});
+   if(ov)r.st='coord';else{r.st='sep';r.gap=Math.round(best)}}
+  out.push(r)});
+ return out}
+
+/* ---------- PLAN view ---------- */
+var plan=$('plan'),V={s:10,ox:0,oy:0,fitted:false},terG=null,dynG=null;
+function fit(){var d=size(plan);V.s=Math.min(d[0]/62,d[1]/42);V.ox=(d[0]-60*V.s)/2;V.oy=(d[1]-40*V.s)/2}
+function PX(x){return V.ox+x*V.s}
+function PY(y){return V.oy+(40-y)*V.s}
+function buildTer(){clr(plan);
+ var st=document.createElement('style');st.textContent=':root{--ter:#c8a46a}[data-theme=light]{--ter:#8a6a30}';
+ plan.appendChild(st);
+ terG=el('g',{'shape-rendering':'crispEdges'},plan);
+ for(var i=0;i<60;i++)for(var j=0;j<40;j++){var h=terrain(i+.5,j+.5),o=Math.max(0,Math.min(.5,(h-300)/2800*.55));
+  el('rect',{x:i,y:39-j,width:1.02,height:1.02,fill:'var(--ter)','fill-opacity':o.toFixed(3)},terG)}
+ dynG=el('g',{},plan)}
+function setTerTx(){terG.setAttribute('transform','translate('+V.ox+','+V.oy+') scale('+V.s+')');terG.style.display=ST.ter?'':'none'}
+function pathStr(pts){return pts.map(function(p){return PX(p[0]).toFixed(1)+','+PY(p[1]).toFixed(1)}).join(' ')}
+function halo(t){t.setAttribute('paint-order','stroke');t.setAttribute('stroke',cv('--halo'));t.setAttribute('stroke-width','3');return t}
+var EVC={};
+function drawPlan(){
+ if(!terG)buildTer();
+ if(!V.fitted)fit();
+ setTerTx();clr(dynG);
+ var g=dynG,tx=cv('--mu'),a=ACT();
+ /* frame + grid */
+ el('rect',{x:PX(0),y:PY(40),width:60*V.s,height:40*V.s,fill:'none',stroke:cv('--bd'),'stroke-width':1},g);
+ for(var gx=10;gx<60;gx+=10){el('line',{x1:PX(gx),y1:PY(0),x2:PX(gx),y2:PY(40),stroke:cv('--bd'),'stroke-dasharray':'2 4'},g);halo(el('text',{x:PX(gx)+3,y:PY(0)-4,fill:tx,'font-size':10},g,gx+' km'))}
+ for(var gy=10;gy<40;gy+=10)el('line',{x1:PX(0),y1:PY(gy),x2:PX(60),y2:PY(gy),stroke:cv('--bd'),'stroke-dasharray':'2 4'},g);
+ var ev=evalAct(a);EVC={};ev.forEach(function(r){EVC[r.c.id]=r});
+ /* constraints */
+ CONS.forEach(function(c){var s=shp(c),col=cv(c.col),r=EVC[c.id],hot=r&&r.st==='coord',sep=r&&r.st==='sep';
+  var at2={fill:col,'fill-opacity':hot?.3:.14,stroke:col,'stroke-width':hot?2.4:1.4,'stroke-dasharray':c.type==='ROZ'?'6 3':''};
+  if(s.k==='poly')el('polygon',at2,g).setAttribute('points',pathStr(s.pts));
+  else if(s.k==='circ'){el('circle',{cx:PX(s.c[0]),cy:PY(s.c[1]),r:s.r*V.s,fill:col,'fill-opacity':hot?.3:.14,stroke:col,'stroke-width':hot?2.4:1.4},g);
+   if(c.edge)el('circle',{cx:PX(s.c[0]),cy:PY(s.c[1]),r:(s.r+c.edge)*V.s,fill:'none',stroke:col,'stroke-dasharray':'3 4','stroke-opacity':.7},g)}
+  else el('polyline',{points:pathStr(s.pts),fill:'none',stroke:col,'stroke-width':2,'stroke-dasharray':'8 4'},g);
+  if(ST.lab){var cc=s.k==='line'?{x:s.pts[1][0]+1.2,y:s.pts[1][1]}:cen(s);var t=halo(el('text',{x:PX(cc.x),y:PY(cc.y),'text-anchor':'middle',fill:col,'font-size':11,'font-weight':600},g,c.type));
+   if(r&&r.st!=='clear')halo(el('text',{x:PX(cc.x),y:PY(cc.y)+13,'text-anchor':'middle',fill:hot?cv('--red'):cv('--org'),'font-size':9.5},g,hot?'NEEDS COORD':'SEPARATED'))}});
+ /* activities */
+ ACTS.forEach(function(b){var sel=b.id===a.id,col=b.col;
+  el('polyline',{points:pathStr(b.pts),fill:'none',stroke:col,'stroke-width':sel?3.6:1.8,'stroke-opacity':sel?1:.55,'stroke-linejoin':'round'},g);
+  var p=at(b,b.L*b.fix),u=unc(b),aged=ageEff(b)>=ST.ta;
+  if(ST.unc)el('circle',{cx:PX(p.x),cy:PY(p.y),r:u*V.s,fill:col,'fill-opacity':sel?.14:.06,stroke:col,'stroke-width':1.4,'stroke-dasharray':aged?'4 3':'','stroke-opacity':sel?1:.5},g);
+  el('circle',{cx:PX(p.x),cy:PY(p.y),r:sel?6:4.5,fill:col,stroke:cv('--halo'),'stroke-width':1.5},g);
+  if(ST.lab)halo(el('text',{x:PX(p.x)+9,y:PY(p.y)-8,fill:col,'font-size':11,'font-weight':sel?700:500},g,b.name))});
+ /* crossing markers for selected */
+ var S=samples(a,90);
+ ev.forEach(function(r){if(r.st==='clear')return;var col=r.st==='coord'?cv('--red'):cv('--org'),i=r.hits[Math.floor(r.hits.length/2)],p=S[i];
+  el('circle',{cx:PX(p.x),cy:PY(p.y),r:8,fill:'none',stroke:col,'stroke-width':2.2},g)});
+ if(ST.move)halo(el('text',{x:PX(0)+8,y:PY(40)+34,fill:cv('--org'),'font-size':11,'font-weight':600},g,'MOVE MODE: drag a constraint, watch what it touches'))}
+
+/* plan interaction */
+var pin=null;
+function lpt(e){var r=plan.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function conAt(m){for(var i=CONS.length-1;i>=0;i--){var c=CONS[i],s=shp(c),w={x:(m.x-V.ox)/V.s,y:40-(m.y-V.oy)/V.s};if(hit(s,w,6/V.s))return c}return null}
+function actAt(m){var w={x:(m.x-V.ox)/V.s,y:40-(m.y-V.oy)/V.s},best=null,bd=9/V.s;
+ ACTS.forEach(function(b){var d=dpoly(w,b.pts,false);if(d<bd){bd=d;best=b}});return best}
+plan.addEventListener('pointerdown',function(e){var m=lpt(e);plan.setPointerCapture(e.pointerId);
+ var c=ST.move?conAt(m):null;pin={m:m,start:m,con:c,o:[V.ox,V.oy],off:c?(c.off||[0,0]).slice():null,moved:false}});
+plan.addEventListener('pointermove',function(e){if(!pin)return;var m=lpt(e),dx=m.x-pin.start.x,dy=m.y-pin.start.y;
+ if(Math.abs(dx)+Math.abs(dy)>3)pin.moved=true;if(!pin.moved)return;
+ if(pin.con){pin.con.off=[pin.off[0]+dx/V.s,pin.off[1]-dy/V.s];refresh()}
+ else{V.ox=pin.o[0]+dx;V.oy=pin.o[1]+dy;V.fitted=true;drawPlan()}});
+function endPin(e){if(!pin)return;var p=pin;pin=null;
+ if(!p.moved){var b=actAt(p.start);if(b){select(b.id)}else{var c=conAt(p.start);if(c)toast(c.name+' · '+c.ref+' '+fmt(c.lo)+'–'+fmt(c.hi)+' ft · owner: '+c.owner+' · approver: '+(c.appr||'UNKNOWN'))}}}
+plan.addEventListener('pointerup',endPin);plan.addEventListener('pointercancel',function(){pin=null});
+function zoom(f,m){var r=size(plan);m=m||{x:r[0]/2,y:r[1]/2};var wx=(m.x-V.ox)/V.s,wy=(m.y-V.oy)/V.s;V.s=Math.max(4,Math.min(60,V.s*f));V.ox=m.x-wx*V.s;V.oy=m.y-wy*V.s;V.fitted=true;drawPlan()}
+plan.addEventListener('wheel',function(e){e.preventDefault();zoom(e.deltaY<0?1.15:1/1.15,lpt(e))},{passive:false});
+$('zin').onclick=function(){zoom(1.25)};$('zout').onclick=function(){zoom(.8)};
+$('zreset').onclick=function(){V.fitted=false;CONS.forEach(function(c){c.off=null});refresh()};
+$('moveBtn').onclick=function(){ST.move=!ST.move;$('moveBtn').classList.toggle('on',ST.move);plan.style.cursor=ST.move?'move':'';refresh()};
+
+/* ---------- SECTION view ---------- */
+function nice(r){var s=[250,500,1000,2000,2500,5000,10000];for(var i=0;i<s.length;i++)if(r/s[i]<=6)return s[i];return 10000}
+function drawSec(){var svg=$('sec'),d=size(svg),W=d[0],H=d[1];clr(svg);svg.setAttribute('viewBox','0 0 '+W+' '+H);
+ var a=ACT(),N=100,S=samples(a,N),ev=evalAct(a),m={l:52,r:14,t:66,b:46},pw=W-m.l-m.r,ph=H-m.t-m.b;
+ var T=S.map(function(p){return terrain(p.x,p.y)}),mode=ST.ref;
+ function D(ref,v,i){return mode==='MSL'?(ref==='MSL'?v:v+T[i]):(ref==='AGL'?v:v-T[i])}
+ var top=0;S.forEach(function(p,i){top=Math.max(top,D(a.ref,a.hi,i));if(mode==='MSL')top=Math.max(top,T[i])});
+ var ymax=top*1.18+(mode==='MSL'?400:100),st=nice(ymax);ymax=Math.ceil(ymax/st)*st;
+ function X(i){return m.l+pw*i/N}
+ function Y(v){return m.t+ph*(1-Math.max(0,Math.min(ymax,v))/ymax)}
+ var tx=cv('--mu'),bd=cv('--bd');
+ for(var v=0;v<=ymax;v+=st){el('line',{x1:m.l,y1:Y(v),x2:W-m.r,y2:Y(v),stroke:bd,'stroke-dasharray':v?'2 4':''},svg);el('text',{x:m.l-6,y:Y(v)+3,'text-anchor':'end',fill:tx,'font-size':10},svg,fmt(v))}
+ el('text',{x:10,y:m.t-10,fill:tx,'font-size':10},svg,'ft '+mode);
+ var dk=Math.ceil(a.L/10)*10,tk=a.L>25?10:5;for(var k=0;k<=a.L;k+=tk)el('text',{x:m.l+pw*k/a.L,y:H-m.b+15,'text-anchor':'middle',fill:tx,'font-size':10},svg,k+' km');
+ el('text',{x:m.l,y:H-m.b+30,fill:tx,'font-size':10},svg,'distance along '+a.name+' (km)');
+ /* terrain / ground */
+ if(mode==='MSL'){var pts=T.map(function(t,i){return X(i).toFixed(1)+','+Y(t).toFixed(1)});
+  el('polygon',{points:pts.join(' ')+' '+X(N)+','+Y(0)+' '+X(0)+','+Y(0),fill:cv('--ter'),'fill-opacity':.35,stroke:cv('--ter'),'stroke-width':1.5},svg)}
+ else{el('rect',{x:m.l,y:Y(0),width:pw,height:3,fill:cv('--ter'),'fill-opacity':.7},svg);halo(el('text',{x:m.l+6,y:Y(0)-6,fill:tx,'font-size':10},svg,'ground = 0 AGL (terrain undulation removed)'))}
+ function band(ref,lo,hi,i0,i1,col,fo,dash,sw){var up=[],dn=[];for(var i=i0;i<=i1;i++){up.push(X(i).toFixed(1)+','+Y(D(ref,hi,i)).toFixed(1));dn.unshift(X(i).toFixed(1)+','+Y(D(ref,lo,i)).toFixed(1))}
+  el('polygon',{points:up.concat(dn).join(' '),fill:col,'fill-opacity':fo,stroke:col,'stroke-width':sw||1.2,'stroke-dasharray':dash||''},svg)}
+ /* constraint bands where they are crossed */
+ var lr=0;ev.forEach(function(r){if(!r.hits.length)return;var c=r.c,col=cv(c.col),runs=[],cur=[r.hits[0]];
+  for(var q=1;q<r.hits.length;q++){if(r.hits[q]===r.hits[q-1]+1)cur.push(r.hits[q]);else{runs.push(cur);cur=[r.hits[q]]}}runs.push(cur);
+  runs.forEach(function(run){var i0=run[0],i1=run[run.length-1];band(c.ref,c.lo,c.hi,i0,i1,col,r.st==='coord'?.34:.16,'5 3');
+   var mid=Math.floor((i0+i1)/2);var ly=Math.max(m.t+12+14*(lr%3),Y(D(c.ref,c.hi,mid))+12+14*(lr%3));lr++;halo(el('text',{x:X(mid),y:ly,'text-anchor':'middle',fill:col,'font-size':10.5,'font-weight':600},svg,c.type+' · '+(r.st==='coord'?'NEEDS COORD':'SEPARATED +'+fmt(r.gap)+' ft')))})});
+ band(a.ref,a.lo,a.hi,0,N,a.col,.4,'',2);
+ /* fix and uncertainty along the path */
+ var fx=m.l+pw*(a.fix),u=unc(a),mi=Math.round(a.fix*N),yy=(Y(D(a.ref,a.lo,mi))+Y(D(a.ref,a.hi,mi)))/2;
+ if(ST.unc){var ux=pw*u/a.L;el('line',{x1:fx-ux,y1:yy,x2:fx+ux,y2:yy,stroke:a.col,'stroke-width':2,'stroke-dasharray':ageEff(a)>=ST.ta?'4 3':''},svg);
+  el('line',{x1:fx-ux,y1:yy-6,x2:fx-ux,y2:yy+6,stroke:a.col,'stroke-width':2},svg);el('line',{x1:fx+ux,y1:yy-6,x2:fx+ux,y2:yy+6,stroke:a.col,'stroke-width':2},svg)}
+ el('circle',{cx:fx,cy:yy,r:5,fill:a.col,stroke:cv('--halo'),'stroke-width':1.5},svg);
+ halo(el('text',{x:fx,y:yy-11,'text-anchor':'middle',fill:cv('--tx'),'font-size':10.5},svg,'last fix ±'+u.toFixed(1)+' km'));
+ $('secTitle').textContent='Section — '+a.name+' · '+a.ref+' '+fmt(a.lo)+'–'+fmt(a.hi)+' ft'}
+
+/* ---------- 3D view (dependency-free canvas) ---------- */
+var c3=$('c3'),g3=c3.getContext('2d'),Cam={yaw:-.6,pitch:.6,dist:80},MK=[];
+function P(x,ft,z,W,H){var Y=ft*0.0003048*ST.ex-1,X=x-30,Z=z-20,cy=Math.cos(Cam.yaw),sy=Math.sin(Cam.yaw),x1=X*cy-Z*sy,z1=X*sy+Z*cy,cp=Math.cos(Cam.pitch),sp=Math.sin(Cam.pitch),y2=Y*cp+z1*sp,z2=z1*cp-Y*sp+Cam.dist;
+ var sc=Cam.dist*Math.min(W,H*1.6)/70/Math.max(z2,1);return[W/2+x1*sc,H*.56-y2*sc,z2]}
+function mix(a,b,t){return'rgb('+a.map(function(v,i){return Math.round(v+(b[i]-v)*t)}).join(',')+')'}
+function draw3(){var d=size(c3.parentNode),dpr=window.devicePixelRatio||1,W=d[0],H=d[1];
+ if(c3.width!==Math.round(W*dpr)||c3.height!==Math.round(H*dpr)){c3.width=Math.round(W*dpr);c3.height=Math.round(H*dpr)}
+ g3.setTransform(dpr,0,0,dpr,0,0);g3.clearRect(0,0,W,H);MK=[];
+ var dark=document.documentElement.getAttribute('data-theme')!=='light',lo=dark?[26,38,52]:[214,222,232],hi=dark?[130,106,72]:[170,138,86],a=ACT();
+ /* terrain */
+ var nx=30,ny=20,Hh=[],q=[],i,j;
+ for(i=0;i<=nx;i++){Hh[i]=[];for(j=0;j<=ny;j++)Hh[i][j]=terrain(i*2,j*2)}
+ if(ST.ter){for(i=0;i<nx;i++)for(j=0;j<ny;j++){var p0=P(i*2,Hh[i][j],j*2,W,H),p1=P(i*2+2,Hh[i+1][j],j*2,W,H),p2=P(i*2+2,Hh[i+1][j+1],j*2+2,W,H),p3=P(i*2,Hh[i][j+1],j*2+2,W,H),av=(Hh[i][j]+Hh[i+1][j]+Hh[i+1][j+1]+Hh[i][j+1])/4;
+  q.push({p:[p0,p1,p2,p3],z:(p0[2]+p1[2]+p2[2]+p3[2])/4,f:mix(lo,hi,Math.max(0,Math.min(1,(av-300)/2800)))})}
+ q.sort(function(u,v){return v.z-u.z});
+ g3.lineWidth=.6;q.forEach(function(f){g3.beginPath();f.p.forEach(function(p,k){k?g3.lineTo(p[0],p[1]):g3.moveTo(p[0],p[1])});g3.closePath();g3.fillStyle=f.f;g3.strokeStyle=f.f;g3.fill();g3.stroke()})}
+ else{var cs=[P(0,0,0,W,H),P(60,0,0,W,H),P(60,0,40,W,H),P(0,0,40,W,H)];g3.strokeStyle=cv('--bd');g3.beginPath();cs.forEach(function(p,k){k?g3.lineTo(p[0],p[1]):g3.moveTo(p[0],p[1])});g3.closePath();g3.stroke()}
+ /* volumes */
+ var F=[];
+ function face(pts,col,al,dash){var z=0;pts.forEach(function(p){z+=p[2]});F.push({p:pts,z:z/pts.length,c:col,a:al,d:dash})}
+ CONS.forEach(function(c){var s=shp(c),r=EVC[c.id],hot=r&&r.st==='coord',col=cv(c.col),al=hot?.34:.16,tc=terrain(cen(s).x,cen(s).y),CAP=9000;
+  if(s.k==='line'){for(var k=0;k<s.pts.length-1;k++){var A=s.pts[k],B=s.pts[k+1],ta=terrain(A[0],A[1]),tb=terrain(B[0],B[1]);
+    var la=c.ref==='AGL'?ta+c.lo:c.lo,lb=c.ref==='AGL'?tb+c.lo:c.lo,ha=Math.min(CAP,c.ref==='AGL'?ta+c.hi:c.hi),hb=Math.min(CAP,c.ref==='AGL'?tb+c.hi:c.hi);
+    face([P(A[0],la,A[1],W,H),P(B[0],lb,B[1],W,H),P(B[0],hb,B[1],W,H),P(A[0],ha,A[1],W,H)],col,.14,true)}return}
+  var ring=s.pts;if(s.k==='circ'){ring=[];for(var k2=0;k2<24;k2++){var an=k2/24*Math.PI*2;ring.push([s.c[0]+s.r*Math.cos(an),s.c[1]+s.r*Math.sin(an)])}}
+  var l3=c.ref==='AGL'?tc+c.lo:c.lo,h3=Math.min(CAP,c.ref==='AGL'?tc+c.hi:c.hi);
+  for(var k3=0;k3<ring.length;k3++){var A2=ring[k3],B2=ring[(k3+1)%ring.length];face([P(A2[0],l3,A2[1],W,H),P(B2[0],l3,B2[1],W,H),P(B2[0],h3,B2[1],W,H),P(A2[0],h3,A2[1],W,H)],col,al*.8,true)}
+  face(ring.map(function(p){return P(p[0],h3,p[1],W,H)}),col,al,true)});
+ ACTS.forEach(function(b){var sel=b.id===a.id,S=samples(b,40),Q=S.map(function(p){var t=terrain(p.x,p.y);return[b.ref==='AGL'?t+b.lo:b.lo,b.ref==='AGL'?t+b.hi:b.hi,p]});
+  for(var k=0;k<Q.length-1;k++){var u=Q[k],v=Q[k+1];face([P(u[2].x,u[0],u[2].y,W,H),P(v[2].x,v[0],v[2].y,W,H),P(v[2].x,v[1],v[2].y,W,H),P(u[2].x,u[1],u[2].y,W,H)],b.col,sel?.55:.22,false)}
+  var fp=at(b,b.L*b.fix),ft=terrain(fp.x,fp.y),mid=(b.ref==='AGL'?ft+(b.lo+b.hi)/2:(b.lo+b.hi)/2),pp=P(fp.x,mid,fp.y,W,H);MK.push({id:b.id,x:pp[0],y:pp[1],b:b,sel:sel})});
+ F.sort(function(u,v){return v.z-u.z});
+ F.forEach(function(f){g3.beginPath();f.p.forEach(function(p,k){k?g3.lineTo(p[0],p[1]):g3.moveTo(p[0],p[1])});g3.closePath();g3.globalAlpha=f.a;g3.fillStyle=f.c;g3.fill();g3.globalAlpha=.8;g3.strokeStyle=f.c;g3.lineWidth=.8;if(f.d)g3.setLineDash([4,3]);g3.stroke();g3.setLineDash([])});
+ g3.globalAlpha=1;
+ MK.forEach(function(m){g3.beginPath();g3.arc(m.x,m.y,m.sel?6:4.5,0,7);g3.fillStyle=m.b.col;g3.fill();g3.lineWidth=1.5;g3.strokeStyle=cv('--halo');g3.stroke();
+  if(ST.lab&&m.sel){g3.font='600 11px Inter,system-ui,sans-serif';g3.lineWidth=3;g3.strokeStyle=cv('--halo');g3.strokeText(m.b.name,m.x+9,m.y-8);g3.fillStyle=m.b.col;g3.fillText(m.b.name,m.x+9,m.y-8)}});
+ var n=P(30,0,43,W,H);g3.font='600 11px Inter,system-ui,sans-serif';g3.fillStyle=cv('--mu');g3.fillText('N',n[0]-4,n[1])}
+var drag3=null;
+c3.addEventListener('pointerdown',function(e){c3.setPointerCapture(e.pointerId);drag3={x:e.clientX,y:e.clientY,yaw:Cam.yaw,pitch:Cam.pitch,moved:false};c3.style.cursor='grabbing'});
+c3.addEventListener('pointermove',function(e){if(!drag3)return;var dx=e.clientX-drag3.x,dy=e.clientY-drag3.y;if(Math.abs(dx)+Math.abs(dy)>3)drag3.moved=true;
+ Cam.yaw=drag3.yaw+dx*.008;Cam.pitch=Math.max(.08,Math.min(1.45,drag3.pitch+dy*.006));draw3()});
+c3.addEventListener('pointerup',function(e){if(!drag3)return;var dg=drag3;drag3=null;c3.style.cursor='grab';
+ if(!dg.moved){var r=c3.getBoundingClientRect(),x=e.clientX-r.left,y=e.clientY-r.top,best=null,bd=18;MK.forEach(function(m){var dd=Math.hypot(m.x-x,m.y-y);if(dd<bd){bd=dd;best=m}});if(best)select(best.id)}});
+c3.addEventListener('wheel',function(e){e.preventDefault();Cam.dist=Math.max(35,Math.min(160,Cam.dist*(e.deltaY>0?1.1:.9)));draw3()},{passive:false});
+
+/* ---------- Decision card ---------- */
+var LAB={known:'KNOWN',aged:'AGED',unknown:'UNKNOWN',undecided:'UNDECIDED'};
+function cardFor(a,ev){var ag=ageEff(a),u=unc(a),nC=0,nS=0,nK=0,k={};
+ ev.forEach(function(r){if(r.st==='coord')nC++;else if(r.st==='sep')nS++;else nK++});
+ var ws=ag>=ST.tu?'unknown':ag>=ST.ta?'aged':'known';if(ws==='known'&&(!ST.pic||!ST.gnss))ws='aged';
+ k.where={st:ws,lab:LAB[ws],v:'Last fix '+Math.round(ag)+' s ago · ±'+u.toFixed(1)+' km',s:!ST.pic?'Picture link down: this is the last fix and it ages with the clock.':!ST.gnss?'GNSS/time degraded: the timestamp itself may be wrong.':ws==='unknown'?'Too old to trust. Treat the position as unknown.':ws==='aged'?'Usable with care. The ring is dashed because the data is aging.':'Fresh enough at the current thresholds.'};
+ var ts=!ST.pic?'undecided':nC?'aged':'known';
+ k.touches={st:ts,lab:!ST.pic?'UNDECIDED':nC?'NEEDS COORD':'KNOWN',sum:'<b>'+nC+'</b> need coordination · <b>'+nS+'</b> separated · <b>'+nK+'</b> clear',s:!ST.pic?'Picture down: static constraints may exist on paper, but who holds the current copy is not decided (Decision 6). Rows use the on-screen geometry.':''};
+ var bad=ev.filter(function(r){return r.st==='coord'&&(!r.c.appr||/UNDECIDED/.test(r.c.appr))}).map(function(r){return r.c.type});
+ var wst=(!a.appr||!a.coord)?'unknown':/UNDECIDED/.test(a.appr)?'undecided':'known';if(wst==='known'&&!ST.vox)wst='aged';
+ k.who={st:wst,lab:LAB[wst],v:'Coordinates: '+(a.coord||'nobody named'),s:'Approves: '+(a.appr||'nobody named')+' · '+a.net+' (placeholder)'+(!ST.vox?' · Voice net down: nobody can be called from here.':'')+(bad.length?' · Crossed constraint with no clear approver: '+bad.join(', ')+'.':'')};
+ var ds,dl,dv,dx;
+ if(ST.pic&&ST.vox){ds='known';dl='NOT DARK';dv='Both links are up, so everything above holds.';dx='Try “Picture lost”. Losing the picture moves nothing and permits nothing.'}
+ else if(!ST.pic&&ST.vox){ds='aged';dl='PICTURE GONE';dv='Voice can still answer WHERE and WHO, one call at a time. Live constraints (EW, fires) go UNKNOWN until called.';dx='Position becomes UNKNOWN in '+Math.max(0,ST.tu-ag)+' s. Losing the picture moves nothing and permits nothing.'}
+ else if(ST.pic&&!ST.vox){ds='aged';dl='VOICE GONE';dv='The picture answers WHERE and TOUCHES, but nobody can be called to coordinate. NEEDS COORD stays unresolved.';dx='Seeing a conflict is not the same as being able to resolve it.'}
+ else{ds='unknown';dl='DARK';dv='Only what was briefed on paper remains. Everything else is UNKNOWN, and unknown is not clear.';dx='Position becomes UNKNOWN in '+Math.max(0,ST.tu-ag)+' s. Losing the picture moves nothing and permits nothing.'}
+ k.dark={st:ds,lab:dl,v:dv,s:dx};
+ k.nC=nC;return k}
+function q(n,t,o,body){return'<div class="q '+o.st+'"><div class="k"><span>'+n+' · '+t+'</span><span class="chip '+o.st+'">'+o.lab+'</span></div><div class="v">'+body+'</div></div>'}
+function renderCard(){var a=ACT(),ev=evalAct(a),k=cardFor(a,ev);
+ var rows=ev.map(function(r){var lab=r.st==='coord'?'NEEDS COORDINATION':r.st==='sep'?'SEPARATED +'+fmt(r.gap)+' ft':'CLEAR',cl=r.st==='coord'?'coord':r.st==='sep'?'sep':'clear',col=r.st==='coord'?'var(--red)':r.st==='sep'?'var(--org)':'var(--grn)';
+  return'<div class="touch"><span class="dot" style="background:'+cv(r.c.col)+'"></span><span>'+r.c.name+' <small style="color:var(--mu)">'+r.c.ref+' '+fmt(r.c.lo)+'–'+fmt(r.c.hi)+'</small></span><span class="st '+cl+'">'+lab+'</span></div>'}).join('');
+ $('card').innerHTML='<div class="cardhead"><div><h3>'+a.name+'</h3><p>'+a.kind+' · '+a.ref+' '+fmt(a.lo)+'–'+fmt(a.hi)+' ft · one activity at a time</p></div></div>'
+ +q(1,'WHERE, and how sure',k.where,k.where.v+'<small>'+k.where.s+'</small>')
+ +q(2,'TOUCHES which constraint',k.touches,'<div class="sum" style="margin:0 0 4px">'+k.touches.sum+'</div>'+rows+(k.touches.s?'<small>'+k.touches.s+'</small>':''))
+ +q(3,'WHO coordinates, WHO approves',k.who,k.who.v+'<small>'+k.who.s+'</small>')
+ +q(4,'IF DARK',k.dark,k.dark.v+'<small>'+k.dark.s+'</small>')
+ +'<div class="foot"><b>Not a clearance.</b> SEPARATED only means the vertical limits on this page do not overlap. Margins and ownership are open decisions, listed below.</div>';
+ return{a:a,ev:ev,k:k}}
+
+/* ---------- KPIs ---------- */
+function renderKPI(c){var nC=0,nu=0;
+ ACTS.forEach(function(b){var e=evalAct(b),k=cardFor(b,e);nC+=k.nC;['where','touches','who','dark'].forEach(function(x){if(k[x].st!=='known')nu++})});
+ var op=DECS.filter(function(d){return d.s==='Open'}).length;
+ var items=[['Activities',ACTS.length,''],['Constraints',CONS.length,''],['Need coordination',nC,nC?'var(--org)':'var(--grn)'],['Answers not known',nu+' / '+ACTS.length*4,nu?'var(--org)':'var(--grn)'],['Decisions still open',op+' / '+DECS.length,'var(--pur)']];
+ $('kpis').innerHTML=items.map(function(x){return'<div class="kpi"><i>'+x[0]+'</i><b style="color:'+(x[2]||'var(--pri)')+'">'+x[1]+'</b></div>'}).join('')}
+
+/* ---------- Decision register ---------- */
+var LIVE=[
+function(c){return c.k.who.st!=='known'},
+function(c){return c.ev.some(function(r){return r.st!=='clear'})},
+function(c){return EVC.C2&&EVC.C2.hits.length>0},
+function(c){return c.k.where.st!=='known'},
+function(c){return c.ev.some(function(r){return r.hits.length&&r.c.ref!==c.a.ref})},
+function(c){return!ST.pic},
+function(c){return ST.pic!==ST.vox},
+function(c){return EVC.C5&&EVC.C5.hits.length>0}];
+function buildReg(){$('reg').innerHTML='';DECS.forEach(function(d,i){var div=document.createElement('div');div.className='dec';div.id='dec'+i;
+ div.innerHTML='<div class="t"><span class="n">'+(i+1)+'</span><span>'+d.t+'</span></div><div class="w">'+d.w+'</div><div class="c"><select aria-label="Status of decision '+(i+1)+'">'+STAT.map(function(s){return'<option'+(s===d.s?' selected':'')+'>'+s+'</option>'}).join('')+'</select><input type="text" placeholder="Note for discussion" aria-label="Note for decision '+(i+1)+'"/></div>';
+ div.querySelector('input').value=d.n;
+ div.querySelector('select').onchange=function(){d.s=this.value;renderKPI();hashNow()};
+ div.querySelector('input').oninput=function(){d.n=this.value};
+ $('reg').appendChild(div)})}
+function markLive(c){DECS.forEach(function(d,i){$('dec'+i).classList.toggle('live',!!LIVE[i](c))})}
+$('copyNotes').onclick=function(){var t='TALAS Light — discussion notes (synthetic data, experimentation concept, not doctrine)\n\n'+DECS.map(function(d,i){return(i+1)+'. '+d.t+'\n   Status: '+d.s+(d.n?'\n   Note: '+d.n:'')}).join('\n')+'\n\nScenario link: '+shareUrl();copyText(t,'Discussion notes copied')};
+
+/* ---------- Legend ---------- */
+(function(){var L=[['#00c8e0','Rotary route'],['#4b8fff','UAS corridor'],['#00e87a','Fixed-wing track'],['#7fe0c0','Counter-UAS area'],['var(--red)','EW constraint (not a lane)'],['var(--org)','Fires / ROZ'],['var(--gold)','Boundary line'],['var(--pur)','Civil / ATS-adjacent'],['var(--ter)','Terrain (notional)']];
+ $('legend').innerHTML=L.map(function(x){return'<span><i class="sw" style="background:'+x[0]+'"></i>'+x[1]+'</span>'}).join('')+'<span><i class="sw" style="border:1.5px dashed var(--mu);border-radius:50%;width:12px;height:12px"></i>Uncertainty (dashed = aged)</span><span><span class="chip known">KNOWN</span><span class="chip aged">AGED</span></span><span><span class="chip unknown">UNKNOWN</span><span class="chip undecided">UNDECIDED</span></span>'})();
+
+/* ---------- toast, clipboard, hash ---------- */
+var tt;function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(function(){t.classList.remove('show')},2600)}
+function copyText(t,ok){function fb(){var ta=document.createElement('textarea');ta.value=t;ta.style.position='absolute';ta.style.left='-9999px';document.body.appendChild(ta);ta.select();var r=false;try{r=document.execCommand('copy')}catch(e){}document.body.removeChild(ta);toast(r?ok:'Copy blocked by the browser. Select the address bar instead.')}
+ if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(function(){toast(ok)},fb);else fb()}
+function hashStr(){return'#s='+ST.sel+'&p='+(+ST.pic)+'&v='+(+ST.vox)+'&g='+(+ST.gnss)+'&a='+ST.extra+'&ta='+ST.ta+'&tu='+ST.tu+'&r='+ST.ref+'&e='+ST.ex+'&d='+DECS.map(function(d){return d.s.charAt(0)}).join('')}
+function shareUrl(){return location.href.split('#')[0]+hashStr()}
+function hashNow(){try{history.replaceState(null,'',hashStr())}catch(e){}}
+function readHash(){var h=location.hash.slice(1);if(!h)return;var o={};h.split('&').forEach(function(p){var kv=p.split('=');o[kv[0]]=kv[1]});
+ if(o.s&&ACTS.some(function(b){return b.id===o.s}))ST.sel=o.s;
+ if(o.p!=null)ST.pic=o.p==='1';if(o.v!=null)ST.vox=o.v==='1';if(o.g!=null)ST.gnss=o.g==='1';
+ var n=function(x,lo,hi,d){x=parseFloat(x);return isNaN(x)?d:Math.max(lo,Math.min(hi,x))};
+ ST.extra=n(o.a,0,180,ST.extra);ST.ta=n(o.ta,10,120,ST.ta);ST.tu=n(o.tu,60,300,ST.tu);ST.ex=n(o.e,1,10,ST.ex);if(o.r==='MSL'||o.r==='AGL')ST.ref=o.r;
+ if(o.d&&o.d.length===DECS.length)DECS.forEach(function(d,i){var s=STAT.filter(function(x){return x.charAt(0)===o.d.charAt(i)})[0];if(s)d.s=s});ST.preset=''}
+
+/* ---------- wiring ---------- */
+var PRE=[{n:'Normal',p:1,v:1,g:1,a:0},{n:'Picture lost',p:0,v:1,g:1,a:90},{n:'Voice lost',p:1,v:0,g:1,a:0},{n:'GNSS / time degraded',p:1,v:1,g:0,a:20},{n:'Both lost — DARK',p:0,v:0,g:1,a:150}];
+function syncUI(){$('tPic').checked=ST.pic;$('tVox').checked=ST.vox;$('tGnss').checked=ST.gnss;
+ $('rAge').value=ST.extra;$('oAge').textContent=ST.extra+' s';$('rTa').value=ST.ta;$('oTa').textContent=ST.ta+' s';$('rTu').value=ST.tu;$('oTu').textContent=ST.tu+' s';
+ $('rEx').value=ST.ex;$('oEx').textContent=ST.ex+'×';$('lTer').checked=ST.ter;$('lLab').checked=ST.lab;$('lUnc').checked=ST.unc;
+ $('refAGL').classList.toggle('on',ST.ref==='AGL');$('refMSL').classList.toggle('on',ST.ref==='MSL');
+ Array.prototype.forEach.call($('presets').children,function(b){b.classList.toggle('on',b.textContent===ST.preset)});
+ Array.prototype.forEach.call($('ents').children,function(b){b.classList.toggle('on',b.dataset.id===ST.sel)})}
+function refresh(){var c=renderCard();drawPlan();drawSec();draw3();renderKPI();markLive(c);syncUI();hashNow()}
+function select(id){ST.sel=id;refresh()}
+$('presets').innerHTML='';PRE.forEach(function(p){var b=document.createElement('button');b.className='btn';b.textContent=p.n;b.onclick=function(){ST.pic=!!p.p;ST.vox=!!p.v;ST.gnss=!!p.g;ST.extra=p.a;ST.preset=p.n;refresh()};$('presets').appendChild(b)});
+ACTS.forEach(function(b){var x=document.createElement('button');x.className='btn';x.dataset.id=b.id;x.textContent=b.name;x.style.borderLeft='3px solid '+b.col;x.onclick=function(){select(b.id)};$('ents').appendChild(x)});
+function bindC(id,key){$(id).onchange=function(){ST[key]=this.checked;ST.preset='';refresh()}}
+bindC('tPic','pic');bindC('tVox','vox');bindC('tGnss','gnss');bindC('lTer','ter');bindC('lLab','lab');bindC('lUnc','unc');
+function bindR(id,key){$(id).oninput=function(){ST[key]=parseFloat(this.value);if(key==='extra')ST.preset='';if(key==='ta'&&ST.tu<=ST.ta+10)ST.tu=ST.ta+10;refresh()}}
+bindR('rAge','extra');bindR('rTa','ta');bindR('rTu','tu');bindR('rEx','ex');
+$('refAGL').onclick=function(){ST.ref='AGL';refresh()};$('refMSL').onclick=function(){ST.ref='MSL';refresh()};
+$('themeBtn').onclick=function(){var r=document.documentElement;r.setAttribute('data-theme',r.getAttribute('data-theme')==='light'?'dark':'light');refresh()};
+$('shareBtn').onclick=function(){copyText(shareUrl(),'Scenario link copied')};
+window.addEventListener('hashchange',function(){readHash();syncUI();refresh()});
+readHash();buildReg();refresh();
+if(window.ResizeObserver){var ro=new ResizeObserver(function(){drawPlan();drawSec();draw3()});[plan.parentNode,$('sec').parentNode,c3.parentNode].forEach(function(n){ro.observe(n)})}else window.addEventListener('resize',function(){drawPlan();drawSec();draw3()});
+})();
+</script>
+</body>
+</html>
